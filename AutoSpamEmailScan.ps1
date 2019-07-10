@@ -48,10 +48,10 @@
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        2.0
-  Author:         <HAO BAN/hao.ban@ehealthsask.ca>
-  Creation Date:  <07/03/2019>
-  Purpose/Change: Resolve the issue that attachment is an Email.
+  Version:        3.0
+  Author:         <HAO BAN/banhao@gmail.com>
+  Creation Date:  <07/10/2019>
+  Purpose/Change: Add extract URL from PDF file module.
   
 .EXAMPLE
   This PowerShell passed the test in PowerShell version 5.1.16299.1146
@@ -78,43 +78,27 @@ $DOMAIN = Get-Content .\init.conf | findstr DOMAIN |  %{ $_.Split('=')[1]; } | f
 $EMAILADDRESS = Get-Content .\init.conf | findstr EMAILADDRESS |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EXCHANGESRV = Get-Content .\init.conf | findstr EXCHANGESRV |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $DLLPATH = Get-Content .\init.conf | findstr DLLPATH |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$PDF2HTMLDLLPATH = Get-Content .\init.conf | findstr PDF2HTMLDLLPATH |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $DOWNLOADDIRECTORY =  Get-Content .\init.conf | findstr DOWNLOADDIRECTORY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $REPORTSDIRECTORY = Get-Content .\init.conf | findstr REPORTSDIRECTORY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EXTENSIONARRAY = Get-Content .\init.conf | findstr EXTENSIONARRAY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EXEMPTURL = (Get-Content .\init.conf | findstr EXEMPTURL |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }).split(",")
-$REPLYCC = Get-Content .\init.conf | findstr REPLYCC |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $SUBFOLDER = Get-Content .\init.conf | findstr SUBFOLDER | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $INTERVAL = [int]$(Get-Content .\init.conf | findstr INTERVAL | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() })
 
 $VIRUSTOTAL_API_KEY = Get-Content .\init.conf | findstr VIRUSTOTAL_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $URLSCAN_API_KEY = Get-Content .\init.conf | findstr URLSCAN_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $GOOGLE_API_KEY = Get-Content .\init.conf | findstr GOOGLE_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-
-Import-Module $DLLPATH
-
-$SERVICE = New-Object Microsoft.Exchange.WebServices.Data.ExchangeService([Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2010_SP2)
-$SERVICE.Credentials = New-Object Net.NetworkCredential($USERNAME, $PASSWORD, $DOMAIN)
-$SERVICE.AutodiscoverUrl($EMAILADDRESS)
-$INBOX = [Microsoft.Exchange.WebServices.Data.Folder]::Bind($SERVICE,[Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::Inbox)
-$FOLDERID = ($INBOX.FindFolders([Microsoft.Exchange.WebServices.Data.FolderView]::new(10)) | where { $_.DisplayName -eq $SUBFOLDER }).Id.UniqueID
-$PROPERTYSET = new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties)
-$PROPERTYSET.RequestedBodyType = [Microsoft.Exchange.WebServices.Data.BodyType]::Text
-
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-If(!(test-path $DOWNLOADDIRECTORY)){ New-Item -ItemType directory -Path $DOWNLOADDIRECTORY }
-If(!(test-path $REPORTSDIRECTORY)){ New-Item -ItemType directory -Path $REPORTSDIRECTORY }
-
-
+$OPSWAT_API_KEY = Get-Content .\init.conf | findstr OPSWAT_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 
 function Google-Safe-Browsing {
 	$BODY = @()
-	$BODY +=[pscustomobject]@{"client" = @{"clientId" = "Client ID"; "clientVersion" = "1.0"}; "threatInfo" = @{"threatTypes" = "MALWARE","SOCIAL_ENGINEERING"; "platformTypes" = "WINDOWS"; "threatEntryTypes" = "URL"; "threatEntries" = @{"url" = "$URL"}}}
+	$BODY +=[pscustomobject]@{"client" = @{"clientId" = "company"; "clientVersion" = "1.0"}; "threatInfo" = @{"threatTypes" = "MALWARE","SOCIAL_ENGINEERING"; "platformTypes" = "WINDOWS"; "threatEntryTypes" = "URL"; "threatEntries" = @{"url" = "$URL"}}}
 	$HEADERS = @{ 'Content-Type' = "application/json" }
 	$JSONBODY = $BODY | ConvertTo-Json
 	$Uri = 'https://safebrowsing.googleapis.com/v4/threatMatches:find?key='+ $GOOGLE_API_KEY
 	$Results = Invoke-RestMethod -Method 'POST' -Uri $Uri -Body $JSONBODY -Headers $HEADERS
-	$ThreatType = $Results | ConvertFrom-Json | select -expand matches | select threatType
+	$ThreatType = $Results | select -expand matches | select threatType
 	Write-OutPut "Google Safe Browsing Report: " >> $LOGFILE
 	if ( ([string]::IsNullOrEmpty($ThreatType)) ) { Write-OutPut "Can not find the result in Google Safe Browsing Scan."  >> $LOGFILE }else{ Write-OutPut "Google Safe Browsing Scan Results:    ",$($ThreatType) >> $LOGFILE }
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
@@ -127,10 +111,10 @@ function Submit-URLSCAN {
 	$RESPONSEAPI = $SCANRESPONSE.api
 	Do {
 		Start-Sleep -s 15
-		$RESPONSE = try { $RESULTS = Invoke-RestMethod -Method 'GET' -Uri $RESPONSEAPI } catch { $_.Exception.Response.StatusCode.Value__}
+		$RESPONSE = try { $SCANRESULT = Invoke-RestMethod -Method 'GET' -Uri $RESPONSEAPI } catch { $_.Exception.Response.StatusCode.Value__}
     } Until ($RESPONSE -ne 404) 
-	$ReportURL = $RESULTS.task.reportURL
-	$ScreenShot = $RESULTS.task.screenshotURL
+	$ReportURL = $SCANRESULT.task.reportURL
+	$ScreenShot = $SCANRESULT.task.screenshotURL
 	Write-OutPut "urlscan.io Report: " >> $LOGFILE
 	Write-OutPut "ScanReportURL:    ",$($ReportURL) >> $LOGFILE
 	Write-OutPut "ScreenShotURL:    ",$($ScreenShot) >> $LOGFILE
@@ -171,6 +155,43 @@ function Submit-FILE-Virustotal {
 	Write-OutPut "POSITIVES |   TOTAL" >> $LOGFILE
 	Write-OutPut $($REPORT.positives) "        |  " $($REPORT.total) >> $LOGFILE
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+}
+
+function Submit-FILE-OPSWAT {
+	$URI = 'https://api.metadefender.com/v4/hash/'+$HASH
+	$HEADERS = @{}
+	$HEADERS.Add('apikey', $OPSWAT_API_KEY)
+	$RESPONSE = try { $SCANRESULT = Invoke-RestMethod -Method 'GET' -Uri $URI  -Headers $HEADERS } catch { $_.Exception.Response.StatusCode.Value__ }
+	if ( $RESPONSE -eq 404){
+		$FILENAME = Split-Path $FILEPATH -leaf
+		$URI = 'https://api.metadefender.com/v4/file'
+		$HEADERS = @{}
+		$HEADERS.Add('apikey', $OPSWAT_API_KEY)
+		$HEADERS.Add('filename', $FILENAME)
+		$SCANRESULT = Invoke-RestMethod -Method 'Post' -Uri $URI  -Headers $HEADERS -Body $FILEPATH -ContentType 'application/octet-stream'
+		$HASH = $SCANRESULT.sha256
+		$DATA_ID = $SCANRESULT.data_id
+		$URI = 'https://api.metadefender.com/v4/file/'+$DATA_ID
+		$HEADERS = @{}
+		$HEADERS.Add('apikey', $OPSWAT_API_KEY)
+		Do {
+			Start-Sleep -s 5
+			$RESPONSE = try { $SCANRESULT = Invoke-RestMethod -Method 'GET' -Uri $URI -Headers $HEADERS } catch { $_.Exception.Response.StatusCode.Value__}
+		} Until ($RESPONSE -ne 404) 
+		Write-OutPut "OPSWAT MetaDefender Cloud File Scan Report: " >> $LOGFILE
+		$RESULTLINK = 'https://metadefender.opswat.com/results#!/file/'+$HASH+'/hash/overview'
+		Write-OutPut $RESULTLINK >> $LOGFILE
+		Write-OutPut "POSITIVES |   TOTAL" >> $LOGFILE
+		Write-OutPut $($SCANRESULT.scan_results.total_detected_avs) "        |  " $($SCANRESULT.scan_results.total_avs) >> $LOGFILE
+		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+	}else {
+		Write-OutPut "OPSWAT MetaDefender Cloud File Scan Report: " >> $LOGFILE
+		$RESULTLINK = 'https://metadefender.opswat.com/results#!/file/'+$HASH+'/hash/overview'
+		Write-OutPut $RESULTLINK >> $LOGFILE
+		Write-OutPut "POSITIVES |   TOTAL" >> $LOGFILE
+		Write-OutPut $($SCANRESULT.scan_results.total_detected_avs) "        |  " $($SCANRESULT.scan_results.total_avs) >> $LOGFILE
+		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+	}
 }
 
 function FromEmailAttachment {
@@ -217,7 +238,16 @@ function FromEmailAttachment {
 			$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
 			$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
 			Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
-			if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){ Submit-FILE-Virustotal }
+			$EXTENSION = [System.IO.Path]::GetExtension($ATTFILENAME)
+			if ( $EXTENSION -eq ".pdf" ){
+				Write-OutPut "=====================Extract URLs from the PDF file=====================" >> $LOGFILE
+				ExtractURLFromPDF
+			}else{
+				if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){ 
+					Submit-FILE-Virustotal
+					Submit-FILE-OPSWAT
+				}
+			}	
 		}
 	}
 }
@@ -227,7 +257,7 @@ function ConvertLogToHTML {
 	$FileLine = @()
 	Foreach ($Line in $File) {
 		$MyObject = New-Object -TypeName PSObject
-		if ( ($Line -match "virustotal.com") -or ($Line -match "urlscan.io") ){
+		if ( ($Line -match "virustotal.com") -or ($Line -match "urlscan.io") -or ($Line -match "opswat.com") ){
 			if ($Line -match ".png"){
 				Add-Member -InputObject $MyObject -Type NoteProperty -Name "Security Scan Report" -Value "<a href='$Line'>$Line</a><img src='$Line' height='640' width='800'>"
 			}else{ Add-Member -InputObject $MyObject -Type NoteProperty -Name "Security Scan Report" -Value "<a href='$Line'>$Line</a>" }
@@ -237,87 +267,140 @@ function ConvertLogToHTML {
 	$($FileLine | ConvertTo-Html -Title "Security Scan Report" -Property "Security Scan Report" ) -replace '&gt;','>' -replace '&lt;','<' -replace '&#39;',"'" | Out-File $HTMLFILE
 }
 
-function MAIN {
-date
-$ITEMS = $INBOX.FindItems($INBOX.TotalCount)
-foreach ( $EMAIL in $ITEMS.Items ){
-	# only get unread emails
-	if( $EMAIL.isread -eq $false ){
-		# load the property set to get to the body
-		$EMAIL.load($PROPERTYSET)
-		$RANDOMID = -join ((48..57) + (97..122) | Get-Random -Count 20 | % {[char]$_})
-		$LOGFILE = $REPORTSDIRECTORY+"security-scan-report_"+$RANDOMID+".log"
-		$HTMLFILE = $REPORTSDIRECTORY+"security-scan-report_"+$RANDOMID+".html"
-		#$EMAIL
-		# output the results - first of all the From, Subject and Date Time Received
-		Write-OutPut "====================================================================" > $LOGFILE
-		Write-OutPut "From:    ",$($EMAIL.From) >> $LOGFILE
-		Write-OutPut "To:    ",$($EMAIL.ToRecipients) >> $LOGFILE
-		Write-OutPut "Subject: ",$($EMAIL.Subject) >> $LOGFILE
-		Write-OutPut "DateTimeReceived:    ",$($EMAIL.DateTimeReceived) >> $LOGFILE
-		Write-OutPut "===================================================================="  >> $LOGFILE
-		$URLRegEx = '\b(?:(?:https?|ftp|file)://|www\.|ftp\.)(?:\([-A-Z0-9+&@#/%=~_|$?!:,.]*\)|[-A-Z0-9+&@#/%=~_|$?!:,.])*(?:\([-A-Z0-9+&@#/%=~_|$?!:,.]*\)|[A-Z0-9+&@#/%=~_|$])'
-		$URLLIST = $($EMAIL.Body.Text) | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
-		$EXPLIST = $EXEMPTURL | foreach-object { $URLLIST -match $_ }
-		$URLARRAY = @()
-		foreach ($URL in $URLLIST){ if ( $URL -notin $EXPLIST ){$URLARRAY = $URLARRAY += $URL }}
-		# URL is not null or empty do check the URL
-		if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
-			foreach($URL in $URLARRAY){ 
-				Write-OutPut "URL:     ",$URL >> $LOGFILE
-				Submit-URL-Virustotal
-				Submit-URLSCAN
-				Google-Safe-Browsing
-			} 
-		}
-		foreach($ATTACH in $EMAIL.Attachments){
-			$EXTENSION = [System.IO.Path]::getExtension($ATTACH.Name.ToString().ToLower())
-			# only save the file that extension is not in the extension list
-			if ( !$EXTENSIONARRAY.contains($EXTENSION) -or [string]::IsNullOrEmpty($EXTENSION) ){
-				if ( ($ATTACH.ContentType -eq "message/rfc822") -or ([string]::IsNullOrEmpty($ATTACH.ContentType)) -and ($ATTACH.PSobject.Properties.name -match "Item") ){
-					Write-OutPut "=====================The attachment is an email=====================" >> $LOGFILE
-					$MIMEPROPERTYSET = new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.ItemSchema]::MimeContent)
-					$ATTACH.Load($MIMEPROPERTYSET)
-					$AttachmentData = $ATTACH.Item.MimeContent.Content
-					$ATTFILENAME = ($DOWNLOADDIRECTORY + [GUID]::NewGuid().ToString() + "_MSG.eml")
-					$FileExtension = "eml"
-				}else{
-					$ATTACH.Load()
-					$AttachmentData = $ATTACH.Content
-					$ATTFILENAME = ($DOWNLOADDIRECTORY + $ATTACH.Name.ToString())
-				}
-				$ATTFILE = new-object System.IO.FileStream(($ATTFILENAME), [System.IO.FileMode]::Create)
-				$ATTFILE.Write($AttachmentData, 0, $AttachmentData.Length)
-				$ATTFILE.Close()
-				Write-OutPut "Downloaded Attachment : "  ($ATTFILENAME) >> $LOGFILE
-				$ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm
-				$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
-				$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
-				Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
-				if ( $FileExtension -eq "eml" ){ 
-					FromEmailAttachment $ATTFILENAME
-					} else{				
-						if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){ Submit-FILE-Virustotal }
-					}
-					
-			}
-		}
-		Write-OutPut "=============================END====================================" >> $LOGFILE
-		ConvertLogToHTML
-		$REPLYTO = $($EMAIL.From.Address.ToString())
-		$REPLYSUBJECT = "AUTO-REPLY/Security Scan Report-- "+$($EMAIL.Subject)
-		Send-MailMessage -SmtpServer $EXCHANGESRV -To $REPLYTO -From $EMAILADDRESS -Cc $REPLYCC -Subject $REPLYSUBJECT -Body '<h4>Thanks for your email submission! Please view the Security Scan Report!</h4>' -BodyAsHtml -Attachments $HTMLFILE
-	}
-	$EMAIL.isRead = $true
-	$EMAIL.Update([Microsoft.Exchange.WebServices.Data.ConflictResolutionMode]::AutoResolve)
-}
+function ExtractURLFromPDF {
+	Add-Type -Path $PDF2HTMLDLLPATH
+	$extractor = new-object Bytescout.PDF2HTML.HTMLExtractor
+	$extractor.LoadDocumentFromFile($ATTFILENAME)
+	$FileName = Split-Path $ATTFILENAME -leaf
+	$FilePath = Split-Path -path $ATTFILENAME
+	$URLArrayFromHTML = @()
+	for ($i=0;$i -lt $extractor.GetPageCount();$i++){
+		$HTMLFILE = $FilePath+"\"+$i+".html"
+		$extractor.SaveHtmlPageToFile($i, $HTMLFILE)
+		$URLArrayFromHTML = Get-Content $HTMLFILE | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
+		$URLArrayFromHTML += $URLArrayFromHTML
+	}	
+	$URLArrayFromPDF = Get-Content $ATTFILENAME | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
+	$URLLIST = $URLArrayFromHTML + $URLArrayFromPDF | Sort-Object | Get-Unique
+	$EXPLIST = $EXEMPTURL | foreach-object { $URLLIST -match $_ }
+	$URLARRAY = @()
+	foreach ($URL in $URLLIST){ if ( $URL -notin $EXPLIST ){$URLARRAY = $URLARRAY += $URL }}
+	# URL is not null or empty do check the URL
+	if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
+		foreach($URL in $URLARRAY){ 
+			Write-OutPut "URL:     ",$URL >> $LOGFILE
+			Submit-URL-Virustotal
+			Submit-URLSCAN
+			Google-Safe-Browsing
+		} 
+	}else{ Write-OutPut "=====================No URL in the PDF file needs to scan=====================" >> $LOGFILE }
 }
 
+function MAIN {
+	date
+	If(!(test-path $DOWNLOADDIRECTORY)){ New-Item -ItemType directory -Path $DOWNLOADDIRECTORY }
+	If(!(test-path $REPORTSDIRECTORY)){ New-Item -ItemType directory -Path $REPORTSDIRECTORY }
+	Import-Module $DLLPATH
+	$SERVICE = New-Object Microsoft.Exchange.WebServices.Data.ExchangeService([Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2010_SP2)
+	$SERVICE.Credentials = New-Object Net.NetworkCredential($USERNAME, $PASSWORD, $DOMAIN)
+	$SERVICE.AutodiscoverUrl($EMAILADDRESS)
+	$INBOX = [Microsoft.Exchange.WebServices.Data.Folder]::Bind($SERVICE,[Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::Inbox)
+	$FOLDERID = ($INBOX.FindFolders([Microsoft.Exchange.WebServices.Data.FolderView]::new(10)) | where { $_.DisplayName -eq $SUBFOLDER }).Id.UniqueID
+	$PROPERTYSET = new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties)
+	$PROPERTYSET.RequestedBodyType = [Microsoft.Exchange.WebServices.Data.BodyType]::Text
+	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+	if ( $INBOX.TotalCount -ne 0 ){
+		$ITEMS = $INBOX.FindItems($INBOX.TotalCount)
+		foreach ( $EMAIL in $ITEMS.Items ){
+			# only get unread emails
+			if( $EMAIL.isread -eq $false ){
+					# load the property set to get to the body
+					$EMAIL.load($PROPERTYSET)
+					$RANDOMID = -join ((48..57) + (97..122) | Get-Random -Count 20 | % {[char]$_})
+					$LOGFILE = $REPORTSDIRECTORY+"security-scan-report_"+$RANDOMID+".log"
+					$HTMLFILE = $REPORTSDIRECTORY+"security-scan-report_"+$RANDOMID+".html"
+					# output the results - first of all the From, Subject and Date Time Received
+					Write-OutPut "====================================================================" > $LOGFILE
+					Write-OutPut "From:    ",$($EMAIL.From) >> $LOGFILE
+					Write-OutPut "To:    ",$($EMAIL.ToRecipients) >> $LOGFILE
+					Write-OutPut "Subject: ",$($EMAIL.Subject) >> $LOGFILE
+					Write-OutPut "DateTimeReceived:    ",$($EMAIL.DateTimeReceived) >> $LOGFILE
+					Write-OutPut "===================================================================="  >> $LOGFILE
+					$URLRegEx = '\b(?:(?:https?|ftp|file)://|www\.|ftp\.)(?:\([-A-Z0-9+&@#/%=~_|$?!:,.]*\)|[-A-Z0-9+&@#/%=~_|$?!:,.])*(?:\([-A-Z0-9+&@#/%=~_|$?!:,.]*\)|[A-Z0-9+&@#/%=~_|$])'
+					$URLLIST = $($EMAIL.Body.Text) | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
+					$EXPLIST = $EXEMPTURL | foreach-object { $URLLIST -match $_ }
+					$URLARRAY = @()
+					foreach ($URL in $URLLIST){ if ( $URL -notin $EXPLIST ){$URLARRAY = $URLARRAY += $URL }}
+					# URL is not null or empty do check the URL
+					if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
+						foreach($URL in $URLARRAY){ 
+							Write-OutPut "URL:     ",$URL >> $LOGFILE
+							Submit-URL-Virustotal
+							Submit-URLSCAN
+							Google-Safe-Browsing
+						} 
+					}
+					foreach($ATTACH in $EMAIL.Attachments){
+						$EXTENSION = [System.IO.Path]::GetExtension($ATTACH.Name.ToString().ToLower())
+						# only save the file that extension is not in the extension list
+						if ( !$EXTENSIONARRAY.contains($EXTENSION) -or [string]::IsNullOrEmpty($EXTENSION) ){
+							if ( ($ATTACH.ContentType -eq "message/rfc822") -or ([string]::IsNullOrEmpty($ATTACH.ContentType)) -and ($ATTACH.PSobject.Properties.name -match "Item") ){
+								Write-OutPut "=====================The attachment is an email=====================" >> $LOGFILE
+								$MIMEPROPERTYSET = new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.ItemSchema]::MimeContent)
+								$ATTACH.Load($MIMEPROPERTYSET)
+								$AttachmentData = $ATTACH.Item.MimeContent.Content
+								$ATTFILENAME = ($DOWNLOADDIRECTORY + [GUID]::NewGuid().ToString() + "_MSG.eml")
+								$EXTENSION = ".eml"
+							}else{
+								$ATTACH.Load()
+								$AttachmentData = $ATTACH.Content
+								$ATTFILENAME = ($DOWNLOADDIRECTORY + $ATTACH.Name.ToString())
+							}
+							$ATTFILE = new-object System.IO.FileStream(($ATTFILENAME), [System.IO.FileMode]::Create)
+							$ATTFILE.Write($AttachmentData, 0, $AttachmentData.Length)
+							$ATTFILE.Close()
+							Write-OutPut "Downloaded Attachment : "  ($ATTFILENAME) >> $LOGFILE
+							$ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm
+							$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
+							$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
+							Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
+							if ( $EXTENSION -eq ".eml" ){ 
+								FromEmailAttachment $ATTFILENAME
+							} else{				
+								if ( $EXTENSION -eq ".pdf" ){
+										Write-OutPut "=====================Extract URLs from the PDF file=====================" >> $LOGFILE
+										ExtractURLFromPDF
+								}else{
+									if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){ 
+										Submit-FILE-Virustotal
+										Submit-FILE-OPSWAT
+									}
+								}
+							}
+						}
+					}
+					Write-OutPut "================================END=================================" >> $LOGFILE
+					ConvertLogToHTML
+					$REPLYTO = $($EMAIL.From.Address.ToString())
+					$REPLYSUBJECT = "AUTO-REPLY/Security Scan Report-- "+$($EMAIL.Subject)
+					$SMTPSERVER = Get-Content .\init.conf | findstr SMTPSERVER |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+					$REPLYCC = Get-Content .\init.conf | findstr REPLYCC |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+					Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Cc $REPLYCC -Subject $REPLYSUBJECT -Body '<h4>Thanks for your email submission! Please view the Security Scan Report!</h4>' -BodyAsHtml -Attachments $HTMLFILE
+			}
+			$EMAIL.isRead = $true
+			$EMAIL.Update([Microsoft.Exchange.WebServices.Data.ConflictResolutionMode]::AutoResolve)
+		}
+	}else{ Write-OutPut "==============There is no email in the inbox==================" }
+}
+
+# Main Procedure
 if ( $INTERVAL -eq 0 ){
 	MAIN
 }else{
 	while($true){
 		MAIN
+		Write-Host -NoNewline "==============After"$INTERVAL" seconds will check again=============="
+		""
 		Start-Sleep -s $INTERVAL
 	}
 }
