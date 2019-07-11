@@ -48,10 +48,10 @@
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        3.1
+  Version:        3.2
   Author:         <HAO BAN/banhao@gmail.com>
   Creation Date:  <07/11/2019>
-  Purpose/Change: use "LoadDocumentFromFile" replace "LoadDocumentFromPage"
+  Purpose/Change: Fix the PFD file locked issue.
   
 .EXAMPLE
   This PowerShell passed the test in PowerShell version 5.1.16299.1146
@@ -292,6 +292,7 @@ function ExtractURLFromPDF {
 			Google-Safe-Browsing
 		} 
 	}else{ Write-OutPut "=====================No URL in the PDF file needs to scan=====================" >> $LOGFILE }
+	$extractor.Reset()			   
 }
 
 function MAIN {
