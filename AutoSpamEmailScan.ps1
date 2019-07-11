@@ -48,10 +48,10 @@
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        3.0
+  Version:        3.1
   Author:         <HAO BAN/banhao@gmail.com>
-  Creation Date:  <07/10/2019>
-  Purpose/Change: Add extract URL from PDF file module.
+  Creation Date:  <07/11/2019>
+  Purpose/Change: use "LoadDocumentFromFile" replace "LoadDocumentFromPage"
   
 .EXAMPLE
   This PowerShell passed the test in PowerShell version 5.1.16299.1146
@@ -98,10 +98,12 @@ function Google-Safe-Browsing {
 	$JSONBODY = $BODY | ConvertTo-Json
 	$Uri = 'https://safebrowsing.googleapis.com/v4/threatMatches:find?key='+ $GOOGLE_API_KEY
 	$Results = Invoke-RestMethod -Method 'POST' -Uri $Uri -Body $JSONBODY -Headers $HEADERS
-	$ThreatType = $Results | select -expand matches | select threatType
-	Write-OutPut "Google Safe Browsing Report: " >> $LOGFILE
-	if ( ([string]::IsNullOrEmpty($ThreatType)) ) { Write-OutPut "Can not find the result in Google Safe Browsing Scan."  >> $LOGFILE }else{ Write-OutPut "Google Safe Browsing Scan Results:    ",$($ThreatType) >> $LOGFILE }
-	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+	if ( ([string]::IsNullOrEmpty($Results)) ) { Write-OutPut "Can not find the result in Google Safe Browsing Scan."  >> $LOGFILE }else{
+		$ThreatType = $Results | select -expand matches | select threatType
+		Write-OutPut "Google Safe Browsing Report: " >> $LOGFILE
+		Write-OutPut "Google Safe Browsing Scan Results:    ",$($ThreatType) >> $LOGFILE
+		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+	}
 }
 
 function Submit-URLSCAN {
@@ -264,22 +266,18 @@ function ConvertLogToHTML {
 		}else{ Add-Member -InputObject $MyObject -Type NoteProperty -Name "Security Scan Report" -Value $Line }
 		$FileLine += $MyObject
 	}
-	$($FileLine | ConvertTo-Html -Title "Security Scan Report" -Property "Security Scan Report" ) -replace '&gt;','>' -replace '&lt;','<' -replace '&#39;',"'" | Out-File $HTMLFILE
+	$($FileLine | ConvertTo-Html -Title "Security Scan Report" -Property "Security Scan Report" ) -replace '&gt;','>' -replace '&lt;','<' -replace '&#39;',"'" | Out-File $HTMLREPFILE
 }
 
 function ExtractURLFromPDF {
 	Add-Type -Path $PDF2HTMLDLLPATH
 	$extractor = new-object Bytescout.PDF2HTML.HTMLExtractor
 	$extractor.LoadDocumentFromFile($ATTFILENAME)
-	$FileName = Split-Path $ATTFILENAME -leaf
+	$BaseName = gci $ATTFILENAME | %{$_.BaseName}
 	$FilePath = Split-Path -path $ATTFILENAME
-	$URLArrayFromHTML = @()
-	for ($i=0;$i -lt $extractor.GetPageCount();$i++){
-		$HTMLFILE = $FilePath+"\"+$i+".html"
-		$extractor.SaveHtmlPageToFile($i, $HTMLFILE)
-		$URLArrayFromHTML = Get-Content $HTMLFILE | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
-		$URLArrayFromHTML += $URLArrayFromHTML
-	}	
+	$HTMLFILE = $FilePath+"\"+$BaseName+".html"
+	$extractor.SaveHtmlToFile($HTMLFILE)
+	$URLArrayFromHTML = Get-Content $HTMLFILE | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
 	$URLArrayFromPDF = Get-Content $ATTFILENAME | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
 	$URLLIST = $URLArrayFromHTML + $URLArrayFromPDF | Sort-Object | Get-Unique
 	$EXPLIST = $EXEMPTURL | foreach-object { $URLLIST -match $_ }
@@ -318,7 +316,7 @@ function MAIN {
 					$EMAIL.load($PROPERTYSET)
 					$RANDOMID = -join ((48..57) + (97..122) | Get-Random -Count 20 | % {[char]$_})
 					$LOGFILE = $REPORTSDIRECTORY+"security-scan-report_"+$RANDOMID+".log"
-					$HTMLFILE = $REPORTSDIRECTORY+"security-scan-report_"+$RANDOMID+".html"
+					$HTMLREPFILE = $REPORTSDIRECTORY+"security-scan-report_"+$RANDOMID+".html"
 					# output the results - first of all the From, Subject and Date Time Received
 					Write-OutPut "====================================================================" > $LOGFILE
 					Write-OutPut "From:    ",$($EMAIL.From) >> $LOGFILE
@@ -385,7 +383,7 @@ function MAIN {
 					$REPLYSUBJECT = "AUTO-REPLY/Security Scan Report-- "+$($EMAIL.Subject)
 					$SMTPSERVER = Get-Content .\init.conf | findstr SMTPSERVER |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 					$REPLYCC = Get-Content .\init.conf | findstr REPLYCC |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-					Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Cc $REPLYCC -Subject $REPLYSUBJECT -Body '<h4>Thanks for your email submission! Please view the Security Scan Report!</h4>' -BodyAsHtml -Attachments $HTMLFILE
+					Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Cc $REPLYCC -Subject $REPLYSUBJECT -Body '<h4>Thanks for your email submission! Please view the Security Scan Report!</h4>' -BodyAsHtml -Attachments $HTMLREPFILE
 			}
 			$EMAIL.isRead = $true
 			$EMAIL.Update([Microsoft.Exchange.WebServices.Data.ConflictResolutionMode]::AutoResolve)
