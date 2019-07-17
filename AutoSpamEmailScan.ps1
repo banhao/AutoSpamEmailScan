@@ -66,7 +66,7 @@ $SALT = $Args[0]
 $ENCODEDPASSWORD = Get-Content .\init.conf | findstr PASSWORD |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
 
 if ( [string]::IsNullOrEmpty($SALT) ){ 
-	$YorN = Read-Host "The salt is empty. Do you want to input the sale to decrypt the password? [ y/n ] (Default is y)" 
+	$YorN = Read-Host "The salt is empty. Do you want to input the salt to decrypt the password? [ y/n ] (Default is y)" 
 	if ( $YorN -match "[yY]" -or ([string]::IsNullOrEmpty($YorN))){
 		$SALT = Read-Host -assecurestring "Please input the salt"
 		$PASSWORD = ([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD))).Replace($([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SALT))),"")
