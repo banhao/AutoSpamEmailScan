@@ -48,10 +48,10 @@
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        3.2
+  Version:        3.3
   Author:         <HAO BAN/banhao@gmail.com>
   Creation Date:  <07/11/2019>
-  Purpose/Change: Fix the PFD file locked issue.
+  Purpose/Change: Fix the issue that cannot convert the PFD file with the CheckPermissions is True.
   
 .EXAMPLE
   This PowerShell passed the test in PowerShell version 5.1.16299.1146
@@ -272,6 +272,7 @@ function ConvertLogToHTML {
 function ExtractURLFromPDF {
 	Add-Type -Path $PDF2HTMLDLLPATH
 	$extractor = new-object Bytescout.PDF2HTML.HTMLExtractor
+	$extractor.CheckPermissions = $False
 	$extractor.LoadDocumentFromFile($ATTFILENAME)
 	$BaseName = gci $ATTFILENAME | %{$_.BaseName}
 	$FilePath = Split-Path -path $ATTFILENAME
@@ -292,7 +293,7 @@ function ExtractURLFromPDF {
 			Google-Safe-Browsing
 		} 
 	}else{ Write-OutPut "=====================No URL in the PDF file needs to scan=====================" >> $LOGFILE }
-	$extractor.Reset()			   
+	$extractor.Reset()
 }
 
 function MAIN {
@@ -353,7 +354,7 @@ function MAIN {
 							}else{
 								$ATTACH.Load()
 								$AttachmentData = $ATTACH.Content
-								$ATTFILENAME = ($DOWNLOADDIRECTORY + $ATTACH.Name.ToString())
+								$ATTFILENAME = ($DOWNLOADDIRECTORY + $ATTACH.Name.ToString().Trim(""))
 							}
 							$ATTFILE = new-object System.IO.FileStream(($ATTFILENAME), [System.IO.FileMode]::Create)
 							$ATTFILE.Write($AttachmentData, 0, $AttachmentData.Length)
@@ -369,6 +370,8 @@ function MAIN {
 								if ( $EXTENSION -eq ".pdf" ){
 										Write-OutPut "=====================Extract URLs from the PDF file=====================" >> $LOGFILE
 										ExtractURLFromPDF
+										Submit-FILE-Virustotal
+										Submit-FILE-OPSWAT
 								}else{
 									if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){ 
 										Submit-FILE-Virustotal
