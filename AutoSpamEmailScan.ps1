@@ -1,39 +1,45 @@
 
 <#PSScriptInfo
 
-.VERSION 3.3
+.VERSION 3.4
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
 .AUTHOR banhao@gmail.com
 
-.COMPANYNAME 
+.COMPANYNAME
 
-.COPYRIGHT 
+.COPYRIGHT
 
-.TAGS 
+.TAGS
 
-.LICENSEURI 
+.LICENSEURI
 
-.PROJECTURI 
+.PROJECTURI
 
-.ICONURI 
+.ICONURI
 
 .EXTERNALMODULEDEPENDENCIES 
 
-.REQUIREDSCRIPTS 
+.REQUIREDSCRIPTS
 
-.EXTERNALSCRIPTDEPENDENCIES 
+.EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
 
 
-#>
+.PRIVATEDATA
+
+#> 
+
+
+
+
 
 <# 
 
 .DESCRIPTION 
- AutoSpamEmailScan.ps1 is used to monitor a specific mailbox that in enterprise users can forward suspicious spam emails to a specific mailbox. 
+AutoSpamEmailScan.ps1 is used to monitor a specific mailbox that in enterprise users can forward suspicious spam emails to a specific mailbox. 
 This PowerShell script can monitor the mailbox for any unread emails, grab the URLs and attachments from the emails and submit to virustotal.com, urlscan.io, Google safe browsing and OPSWAT. Script also can extract URLs from a pdf file. 
 After the scan finished, script can generate HTML format scan report and auto reply to the senders.
 Script can be run once or loop interval, if  in the init.conf is 0 means script will only run one time else the number is the loop interval seconds.
