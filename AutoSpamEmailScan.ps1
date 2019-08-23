@@ -41,6 +41,8 @@ Script can be run once or loop interval, if  in the init.conf is 0 means script 
 Before you run the script Install the Exchange Web Services Managed API 2.2. 
 https://www.microsoft.com/en-us/download/details.aspx?id=42951 
 
+Visit https://github.com/banhao/AutoSpamEmailScan to get the init.conf and Bytescout.PDF2HTML.dll, this dll file is used to convert PDF to HTML.
+
 #> 
 
 Param()
