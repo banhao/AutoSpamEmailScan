@@ -104,10 +104,10 @@ Param()
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        3.3
+  Version:        3.5
   Author:         <HAO BAN/banhao@gmail.com>
-  Creation Date:  <07/11/2019>
-  Purpose/Change: Fix the issue that cannot convert the PFD file with the CheckPermissions is True.
+  Creation Date:  <09/05/2019>
+  Purpose/Change: Use VirusTotal API version 3 to get more information, but still use VirusTotal API version 2 to upload URLs and Files.
   
 .EXAMPLE
   This PowerShell passed the test in PowerShell version 5.1.16299.1146
@@ -180,38 +180,36 @@ function Submit-URLSCAN {
 }
 
 function Submit-URL-Virustotal {
-	# submit URL
 	$BODY = @{ "url" = "$URL"; "apikey" = "$VIRUSTOTAL_API_KEY" }
 	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://www.virustotal.com/vtapi/v2/url/scan' -Body $BODY
 	Start-Sleep -s 15
-	# Get Report
-	$RESOURCE = $SCAN.scan_id
-	$BODY_RPT = @{ "resource" = "$RESOURCE"; "apikey" = "$VIRUSTOTAL_API_KEY" }
-	$REPORT = Invoke-RestMethod -Method 'POST' -Uri 'https://www.virustotal.com/vtapi/v2/url/report' -Body $BODY_RPT
+	$HEADERS = @{ "x-apikey" = "$VIRUSTOTAL_API_KEY" }
+	$BASE64URL = ([System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes("$URL"))).replace('/','_').replace('=','')
+	$SCAN = Invoke-RestMethod -Method 'GET' -Uri "https://www.virustotal.com/api/v3/urls/$BASE64URL" -Headers $HEADERS
+	$PERMALINK = "https://virustotal.com/gui/url/"+$SCAN.data.id+"/detection"
 	Write-OutPut "VirusTotal URL Scan Report: " >> $LOGFILE
-	Write-OutPut $($REPORT.permalink) >> $LOGFILE
-	Write-OutPut "POSITIVES |   TOTAL" >> $LOGFILE
-	Write-OutPut $($REPORT.positives) "        |  " $($REPORT.total) >> $LOGFILE
+	Write-OutPut $PERMALINK >> $LOGFILE
+	Write-OutPut "VirusTotal URL Scan Stats: " >> $LOGFILE
+	Write-OutPut $SCAN.data.attributes.last_analysis_stats >> $LOGFILE
+	Write-OutPut "VirusTotal URL COMMUNITY VOTES : " >> $LOGFILE
+	Write-OutPut $SCAN.data.attributes.total_votes >> $LOGFILE
+	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 }
 
 function Submit-FILE-Virustotal {
-	Do {
-		# check the file report 
-		$BODY_RPT = @{ "resource" = "$HASH"; "apikey" = "$VIRUSTOTAL_API_KEY" }
-		$REPORT = Invoke-RestMethod -Method 'POST' -Uri 'https://www.virustotal.com/vtapi/v2/file/report' -Body $BODY_RPT
-		if ($REPORT.response_code -eq 0){
-			# scan a file
-			Start-Sleep -s 15
-			$BODY = @{ "apikey" = "$VIRUSTOTAL_API_KEY"; "file" = "$FILEPATH" }
-			$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://www.virustotal.com/vtapi/v2/file/scan' -Body $BODY
-			$HASH = $SCAN.sha256
-		}
-		Start-Sleep -s 15
-	}Until ($REPORT.response_code -eq 1)
+	$BODY = @{ "apikey" = "$VIRUSTOTAL_API_KEY"; "file" = "$FILEPATH" }
+	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://www.virustotal.com/vtapi/v2/file/scan' -Body $BODY
+	$HASH = $SCAN.sha256
+	Start-Sleep -s 15
+	$HEADERS = @{ "x-apikey" = "$VIRUSTOTAL_API_KEY" }
+	$SCAN = Invoke-RestMethod -Method 'GET' -Uri "https://www.virustotal.com/api/v3/files/$HASH" -Headers $HEADERS
+	$PERMALINK = "https://virustotal.com/gui/file/"+$SCAN.data.id+"/detection"
 	Write-OutPut "VirusTotal File Scan Report: " >> $LOGFILE
-	Write-OutPut $($REPORT.permalink) >> $LOGFILE
-	Write-OutPut "POSITIVES |   TOTAL" >> $LOGFILE
-	Write-OutPut $($REPORT.positives) "        |  " $($REPORT.total) >> $LOGFILE
+	Write-OutPut $PERMALINK >> $LOGFILE
+	Write-OutPut "VirusTotal File Scan Stats: " >> $LOGFILE
+	Write-OutPut $SCAN.data.attributes.last_analysis_stats >> $LOGFILE
+	Write-OutPut "VirusTotal File COMMUNITY VOTES : " >> $LOGFILE
+	Write-OutPut $SCAN.data.attributes.total_votes >> $LOGFILE
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 }
 
