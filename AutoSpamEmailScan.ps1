@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 3.4
+.VERSION 3.6
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -31,6 +31,8 @@
 .PRIVATEDATA
 
 #> 
+
+
 
 
 
@@ -104,10 +106,10 @@ Param()
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        3.5
+  Version:        3.6
   Author:         <HAO BAN/banhao@gmail.com>
-  Creation Date:  <09/05/2019>
-  Purpose/Change: Use VirusTotal API version 3 to get more information, but still use VirusTotal API version 2 to upload URLs and Files.
+  Creation Date:  <09/06/2019>
+  Purpose/Change: Support Cisco Email Reporting Plug-in .raw format email and add code signing.
   
 .EXAMPLE
   This PowerShell passed the test in PowerShell version 5.1.16299.1146
@@ -418,7 +420,7 @@ function MAIN {
 							$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
 							$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
 							Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
-							if ( $EXTENSION -eq ".eml" ){ 
+							if ( ($EXTENSION -eq ".eml") -or ($EXTENSION -eq ".raw") ){ 
 								FromEmailAttachment $ATTFILENAME
 							} else{				
 								if ( $EXTENSION -eq ".pdf" ){
