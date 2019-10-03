@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 3.6
+.VERSION 3.62
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -106,10 +106,10 @@ Param()
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        3.6
+  Version:        3.62
   Author:         <HAO BAN/banhao@gmail.com>
-  Creation Date:  <09/06/2019>
-  Purpose/Change: Support Cisco Email Reporting Plug-in .raw format email and add code signing.
+  Creation Date:  <10/03/2019>
+  Purpose/Change: Fix the attachment's "Name" Property is expty will cause Terminating Error and stop the script running. 
   
 .EXAMPLE
   This PowerShell passed the test in PowerShell version 5.1.16299.1146
@@ -397,7 +397,9 @@ function MAIN {
 						} 
 					}
 					foreach($ATTACH in $EMAIL.Attachments){
-						$EXTENSION = [System.IO.Path]::GetExtension($ATTACH.Name.ToString().ToLower())
+						if ( ![string]::IsNullOrEmpty($ATTACH.Name)){
+							$EXTENSION = [System.IO.Path]::GetExtension($ATTACH.Name.ToString().ToLower())
+							}else{ $EXTENSION ="" }
 						# only save the file that extension is not in the extension list
 						if ( !$EXTENSIONARRAY.contains($EXTENSION) -or [string]::IsNullOrEmpty($EXTENSION) ){
 							if ( ($ATTACH.ContentType -eq "message/rfc822") -or ([string]::IsNullOrEmpty($ATTACH.ContentType)) -and ($ATTACH.PSobject.Properties.name -match "Item") ){
