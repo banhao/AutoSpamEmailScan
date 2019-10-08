@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 3.62
+.VERSION 4.0
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -106,10 +106,10 @@ Param()
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        3.62
+  Version:        4.0
   Author:         <HAO BAN/banhao@gmail.com>
-  Creation Date:  <10/03/2019>
-  Purpose/Change: Fix the attachment's "Name" Property is expty will cause Terminating Error and stop the script running. 
+  Creation Date:  <10/04/2019>
+  Purpose/Change: Support the "HTML" files as attachments. 
   
 .EXAMPLE
   This PowerShell passed the test in PowerShell version 5.1.16299.1146
@@ -325,20 +325,24 @@ function ConvertLogToHTML {
 	$($FileLine | ConvertTo-Html -Title "Security Scan Report" -Property "Security Scan Report" ) -replace '&gt;','>' -replace '&lt;','<' -replace '&#39;',"'" | Out-File $HTMLREPFILE
 }
 
-function ExtractURLFromPDF {
-	Add-Type -Path $PDF2HTMLDLLPATH
-	$extractor = new-object Bytescout.PDF2HTML.HTMLExtractor
-	$extractor.CheckPermissions = $False
-	$extractor.LoadDocumentFromFile($ATTFILENAME)
-	$BaseName = gci $ATTFILENAME | %{$_.BaseName}
-	$FilePath = Split-Path -path $ATTFILENAME
-	$HTMLFILE = $FilePath+"\"+$BaseName+".html"
-	$extractor.SaveHtmlToFile($HTMLFILE)
-	$URLArrayFromHTML = Get-Content $HTMLFILE | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
-	$URLArrayFromPDF = Get-Content $ATTFILENAME | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
-	$URLLIST = $URLArrayFromHTML + $URLArrayFromPDF | Sort-Object | Get-Unique
-	$EXPLIST = $EXEMPTURL | foreach-object { $URLLIST -match $_ }
-	$URLARRAY = @()
+function ExtractURLFromPDFHTML {
+	if ( $EXTENSION -eq ".pdf" ){
+		Add-Type -Path $PDF2HTMLDLLPATH
+		$extractor = new-object Bytescout.PDF2HTML.HTMLExtractor
+		$extractor.CheckPermissions = $False
+		$extractor.LoadDocumentFromFile($ATTFILENAME)
+		$BaseName = gci $ATTFILENAME | %{$_.BaseName}
+		$FilePath = Split-Path -path $ATTFILENAME
+		$HTMLFILE = $FilePath+"\"+$BaseName+".html"
+		$extractor.SaveHtmlToFile($HTMLFILE)
+	}else{
+		$HTMLFILE = $ATTFILENAME
+	}
+		$URLArrayFromHTML = Get-Content $HTMLFILE | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
+		$URLArrayFromPDF = Get-Content $ATTFILENAME | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
+		$URLLIST = $URLArrayFromHTML + $URLArrayFromPDF | Sort-Object | Get-Unique
+		$EXPLIST = $EXEMPTURL | foreach-object { $URLLIST -match $_ }
+		$URLARRAY = @()
 	foreach ($URL in $URLLIST){ if ( $URL -notin $EXPLIST ){$URLARRAY = $URLARRAY += $URL }}
 	# URL is not null or empty do check the URL
 	if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
@@ -348,7 +352,7 @@ function ExtractURLFromPDF {
 			Submit-URLSCAN
 			Google-Safe-Browsing
 		} 
-	}else{ Write-OutPut "=====================No URL in the PDF file needs to scan=====================" >> $LOGFILE }
+	}else{ Write-OutPut "=====================No URL in the PDF/HTML file needs to scan=====================" >> $LOGFILE }
 	$extractor.Reset()
 }
 
@@ -425,9 +429,9 @@ function MAIN {
 							if ( ($EXTENSION -eq ".eml") -or ($EXTENSION -eq ".raw") ){ 
 								FromEmailAttachment $ATTFILENAME
 							} else{				
-								if ( $EXTENSION -eq ".pdf" ){
-										Write-OutPut "=====================Extract URLs from the PDF file=====================" >> $LOGFILE
-										ExtractURLFromPDF
+								if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") ){
+										Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
+										ExtractURLFromPDFHTML
 										Submit-FILE-Virustotal
 										Submit-FILE-OPSWAT
 								}else{
