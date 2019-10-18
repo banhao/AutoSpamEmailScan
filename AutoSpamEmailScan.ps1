@@ -13,7 +13,7 @@
 
 .TAGS
 
-.LICENSEURI
+.LICENSEURI https://github.com/banhao/AutoSpamEmailScan/blob/master/LICENSE
 
 .PROJECTURI
 
@@ -51,6 +51,9 @@ https://www.microsoft.com/en-us/download/details.aspx?id=42951
 
 Visit https://github.com/banhao/AutoSpamEmailScan to get the init.conf and Bytescout.PDF2HTML.dll, this dll file is used to convert PDF to HTML.
 
+Please check the License before you download this script, if you don't agree with the License please don't download and use this script. https://github.com/banhao/AutoSpamEmailScan/blob/master/LICENSE
+
+This version 4.0.1 update the init.conf file so please go to https://github.com/banhao/AutoSpamEmailScan to download the init.conf
 #> 
 
 Param()
@@ -106,13 +109,13 @@ Param()
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        4.0
+  Version:        4.0.1
   Author:         <HAO BAN/banhao@gmail.com>
-  Creation Date:  <10/04/2019>
-  Purpose/Change: Support the "HTML" files as attachments. 
+  Creation Date:  <10/08/2019>
+  Purpose/Change: Fix the issue when run on Windows Server 2012R2 and powershell version upgrade to 5.1.14409.1005
   
 .EXAMPLE
-  This PowerShell passed the test in PowerShell version 5.1.16299.1146
+  This PowerShell passed the test in PowerShell version 5.1.16299.1146. Can not run on Powershell version 4 and below.
   PS H:\>host  
 	Check the PowerShell version.
  
@@ -135,7 +138,7 @@ $USERNAME = Get-Content .\init.conf | findstr USERNAME |  %{ $_.Split('=')[1]; }
 $DOMAIN = Get-Content .\init.conf | findstr DOMAIN |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EMAILADDRESS = Get-Content .\init.conf | findstr EMAILADDRESS |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EXCHANGESRV = Get-Content .\init.conf | findstr EXCHANGESRV |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$DLLPATH = Get-Content .\init.conf | findstr DLLPATH |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$EWSDLLPATH = Get-Content .\init.conf | findstr EWSDLLPATH |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $PDF2HTMLDLLPATH = Get-Content .\init.conf | findstr PDF2HTMLDLLPATH |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $DOWNLOADDIRECTORY =  Get-Content .\init.conf | findstr DOWNLOADDIRECTORY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $REPORTSDIRECTORY = Get-Content .\init.conf | findstr REPORTSDIRECTORY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
@@ -360,7 +363,7 @@ function MAIN {
 	date
 	If(!(test-path $DOWNLOADDIRECTORY)){ New-Item -ItemType directory -Path $DOWNLOADDIRECTORY }
 	If(!(test-path $REPORTSDIRECTORY)){ New-Item -ItemType directory -Path $REPORTSDIRECTORY }
-	Import-Module $DLLPATH
+	Import-Module $EWSDLLPATH
 	$SERVICE = New-Object Microsoft.Exchange.WebServices.Data.ExchangeService([Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2010_SP2)
 	$SERVICE.Credentials = New-Object Net.NetworkCredential($USERNAME, $PASSWORD, $DOMAIN)
 	$SERVICE.AutodiscoverUrl($EMAILADDRESS)
