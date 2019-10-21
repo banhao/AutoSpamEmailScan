@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.0.1
+.VERSION 4.0.2
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -53,7 +53,14 @@ Visit https://github.com/banhao/AutoSpamEmailScan to get the init.conf and Bytes
 
 Please check the License before you download this script, if you don't agree with the License please don't download and use this script. https://github.com/banhao/AutoSpamEmailScan/blob/master/LICENSE
 
-This version 4.0.1 update the init.conf file so please go to https://github.com/banhao/AutoSpamEmailScan to download the init.conf
+Update the Bytescout.PDF2HTML.dll to version 10.6.0.3667. It's still a trial version and will expire after 90 days. If you see this error: 
+  --------------------------------------------------------------------------------------
+  "new-object : Exception calling ".ctor" with "0" argument(s): "Trial period expired."
+  At H:\MonitorEmailSecurity\MonitorEmailSecurity.ps1:273 char:16
+  +         $extractor = new-object Bytescout.PDF2HTML.HTMLExtractor
+  --------------------------------------------------------------------------------------
+That means the DLL file has been expired.
+
 #> 
 
 Param()
@@ -109,10 +116,16 @@ Param()
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        4.0.1
+  Version:        4.0.2
   Author:         <HAO BAN/banhao@gmail.com>
-  Creation Date:  <10/08/2019>
-  Purpose/Change: Fix the issue when run on Windows Server 2012R2 and powershell version upgrade to 5.1.14409.1005
+  Creation Date:  <10/21/2019>
+  Purpose/Change: One funcation name was changed but calls the old name in the program. Update the Bytescout.PDF2HTML.dll to version 10.6.0.3667. It's still a trial version and will expire after 90 days. If you see this error: 
+  --------------------------------------------------------------------------------------
+  "new-object : Exception calling ".ctor" with "0" argument(s): "Trial period expired."
+  At H:\MonitorEmailSecurity\MonitorEmailSecurity.ps1:273 char:16
+  +         $extractor = new-object Bytescout.PDF2HTML.HTMLExtractor
+  --------------------------------------------------------------------------------------
+  That means the DLL file has been expired.
   
 .EXAMPLE
   This PowerShell passed the test in PowerShell version 5.1.16299.1146. Can not run on Powershell version 4 and below.
@@ -302,7 +315,7 @@ function FromEmailAttachment {
 			$EXTENSION = [System.IO.Path]::GetExtension($ATTFILENAME)
 			if ( $EXTENSION -eq ".pdf" ){
 				Write-OutPut "=====================Extract URLs from the PDF file=====================" >> $LOGFILE
-				ExtractURLFromPDF
+				ExtractURLFromPDFHTML
 			}else{
 				if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){ 
 					Submit-FILE-Virustotal
