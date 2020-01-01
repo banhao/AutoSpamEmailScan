@@ -6,3 +6,6 @@ Script can be run once or loop interval, if $INTERVAL in the init.conf is 0 mean
 
 Before you run the script Install the Exchange Web Services Managed API 2.2. 
 https://www.microsoft.com/en-us/download/details.aspx?id=42951
+
+You also can find this script in powershellgallery.com
+https://www.powershellgallery.com/packages/AutoSpamEmailScan/4.0.2
