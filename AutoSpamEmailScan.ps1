@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.0.2
+.VERSION 4.1.0
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -116,8 +116,12 @@ Param()
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        4.0.2
+  Version:        4.1.0
   Author:         <HAO BAN/banhao@gmail.com>
+
+  Creation Date:  <01/22/2020>
+  Purpose/Change: Add a new Function checkphish.ai
+
   Creation Date:  <10/21/2019>
   Purpose/Change: One funcation name was changed but calls the old name in the program. Update the Bytescout.PDF2HTML.dll to version 10.6.0.3667. It's still a trial version and will expire after 90 days. If you see this error: 
   --------------------------------------------------------------------------------------
@@ -164,6 +168,21 @@ $VIRUSTOTAL_API_KEY = Get-Content .\init.conf | findstr VIRUSTOTAL_API_KEY |  %{
 $URLSCAN_API_KEY = Get-Content .\init.conf | findstr URLSCAN_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $GOOGLE_API_KEY = Get-Content .\init.conf | findstr GOOGLE_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $OPSWAT_API_KEY = Get-Content .\init.conf | findstr OPSWAT_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$CHECKPHISH_API_KEY = Get-Content .\init.conf | findstr CHECKPHISH_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+
+function Submit-CHECKPHISH {
+	$HEADERS = @{ "Content-Type" = "application/json" }
+	$SCANBODY = @{ "urlInfo" = @{ "url" = "$URL"} ; "apiKey" = "$CHECKPHISH_API_KEY" }
+	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://developers.checkphish.ai/api/neo/scan' -Headers $HEADERS -Body $(convertto-json($SCANBODY))
+	Start-Sleep -s 60
+	$RESULTBODY = @{ "apiKey" = "$CHECKPHISH_API_KEY" ; "jobID" = "$($SCAN.jobID)" ; "insights" = $true }
+	$RESULTS = Invoke-RestMethod -Method 'POST' -Uri 'https://developers.checkphish.ai/api/neo/scan/status' -Headers $HEADERS -Body $(convertto-json($RESULTBODY))
+	Write-OutPut "CheckPhish Scan Report: " >> $LOGFILE
+	Write-OutPut "ScanResultsDisposition:    ",$($RESULTS.disposition) >> $LOGFILE
+	Write-OutPut "ScanReportURL:             ",$($RESULTS.insights) >> $LOGFILE
+	Write-OutPut "ScreenShotURL:             ",$($RESULTS.screenshot_path) >> $LOGFILE
+	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+}
 
 function Google-Safe-Browsing {
 	$BODY = @()
@@ -191,9 +210,10 @@ function Submit-URLSCAN {
     } Until ($RESPONSE -ne 404) 
 	$ReportURL = $SCANRESULT.task.reportURL
 	$ScreenShot = $SCANRESULT.task.screenshotURL
-	Write-OutPut "urlscan.io Report: " >> $LOGFILE
-	Write-OutPut "ScanReportURL:    ",$($ReportURL) >> $LOGFILE
-	Write-OutPut "ScreenShotURL:    ",$($ScreenShot) >> $LOGFILE
+	Write-OutPut "URLscan Scan Report: " >> $LOGFILE
+	Write-OutPut "ScanReportURL:     ",$($ReportURL) >> $LOGFILE
+	Write-OutPut "ScreenShotURL:     ",$($ScreenShot) >> $LOGFILE
+	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	Start-Sleep -s 3
 }
 
@@ -292,6 +312,7 @@ function FromEmailAttachment {
 			Write-OutPut "URL:     ",$URL  >> $LOGFILE
 			Submit-URL-Virustotal
 			Submit-URLSCAN
+			Submit-CHECKPHISH
 			Google-Safe-Browsing
 		} 
 	}
@@ -331,7 +352,7 @@ function ConvertLogToHTML {
 	$FileLine = @()
 	Foreach ($Line in $File) {
 		$MyObject = New-Object -TypeName PSObject
-		if ( ($Line -match "virustotal.com") -or ($Line -match "urlscan.io") -or ($Line -match "opswat.com") ){
+		if ( ($Line -match "virustotal.com") -or ($Line -match "urlscan.io") -or ($Line -match "opswat.com") -or ($Line -match "checkphish.ai") -or ($Line -match "googleapis.com") ){
 			if ($Line -match ".png"){
 				Add-Member -InputObject $MyObject -Type NoteProperty -Name "Security Scan Report" -Value "<a href='$Line'>$Line</a><img src='$Line' height='640' width='800'>"
 			}else{ Add-Member -InputObject $MyObject -Type NoteProperty -Name "Security Scan Report" -Value "<a href='$Line'>$Line</a>" }
@@ -366,6 +387,7 @@ function ExtractURLFromPDFHTML {
 			Write-OutPut "URL:     ",$URL >> $LOGFILE
 			Submit-URL-Virustotal
 			Submit-URLSCAN
+			Submit-CHECKPHISH
 			Google-Safe-Browsing
 		} 
 	}else{ Write-OutPut "=====================No URL in the PDF/HTML file needs to scan=====================" >> $LOGFILE }
@@ -413,6 +435,7 @@ function MAIN {
 							Write-OutPut "URL:     ",$URL >> $LOGFILE
 							Submit-URL-Virustotal
 							Submit-URLSCAN
+							Submit-CHECKPHISH
 							Google-Safe-Browsing
 						} 
 					}
@@ -461,11 +484,13 @@ function MAIN {
 					}
 					Write-OutPut "================================END=================================" >> $LOGFILE
 					ConvertLogToHTML
-					$REPLYTO = $($EMAIL.From.Address.ToString())
 					$REPLYSUBJECT = "AUTO-REPLY/Security Scan Report-- "+$($EMAIL.Subject)
 					$SMTPSERVER = Get-Content .\init.conf | findstr SMTPSERVER |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+					#$REPLYTO = $($EMAIL.From.Address.ToString()) // If you want to send the scan report to the sender who reported the spam email //
+					$REPLYTO = Get-Content .\init.conf | findstr REPLYTO |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 					$REPLYCC = Get-Content .\init.conf | findstr REPLYCC |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-					Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Cc $REPLYCC -Subject $REPLYSUBJECT -Body '<h4>Thanks for your email submission! Please view the Security Scan Report!</h4>' -BodyAsHtml -Attachments $HTMLREPFILE
+					$EMAIBODY = '%CUSTOMER_EMAIL=' + $($EMAIL.From.Address) + "`r`n" + '%CUSTOMER=' + $($EMAIL.From.Name) + "`r`n" + '%SUMMARY=Security Scan Report--' + $($EMAIL.Subject)
+					Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Cc $REPLYCC -Subject $REPLYSUBJECT -Body $EMAIBODY -Attachments $HTMLREPFILE
 			}
 			$EMAIL.isRead = $true
 			$EMAIL.Update([Microsoft.Exchange.WebServices.Data.ConflictResolutionMode]::AutoResolve)
