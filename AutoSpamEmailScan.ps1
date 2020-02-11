@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.1.1
+.VERSION 4.1.2
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -113,7 +113,7 @@ That means the DLL file has been expired.
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        4.1.1
+  Version:        4.1.2
   Author:         <HAO BAN/banhao@gmail.com>
 
   Creation Date:  <02/11/2020>
@@ -174,7 +174,7 @@ function Submit-CHECKPHISH {
 	$HEADERS = @{ "Content-Type" = "application/json" }
 	$SCANBODY = @{ "urlInfo" = @{ "url" = "$URL"} ; "apiKey" = "$CHECKPHISH_API_KEY" }
 	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://developers.checkphish.ai/api/neo/scan' -Headers $HEADERS -Body $(convertto-json($SCANBODY))
-	if ( ![string]::IsNullOrEmpty($SCAN.errorMessage) ) {
+	if ( [string]::IsNullOrEmpty($SCAN.errorMessage) ) {
 		Start-Sleep -s 60
 		$RESULTBODY = @{ "apiKey" = "$CHECKPHISH_API_KEY" ; "jobID" = "$($SCAN.jobID)" ; "insights" = $true }
 		$RESULTS = Invoke-RestMethod -Method 'POST' -Uri 'https://developers.checkphish.ai/api/neo/scan/status' -Headers $HEADERS -Body $(convertto-json($RESULTBODY))
