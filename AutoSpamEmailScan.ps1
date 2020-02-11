@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.1.0
+.VERSION 4.1.1
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -63,9 +63,6 @@ That means the DLL file has been expired.
 
 #> 
 
-Param()
-
-
 <#
 .SYNOPSIS
   <>
@@ -116,8 +113,11 @@ Param()
 	......
 	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
   
-  Version:        4.1.0
+  Version:        4.1.1
   Author:         <HAO BAN/banhao@gmail.com>
+
+  Creation Date:  <02/11/2020>
+  Purpose/Change: Add checkphish.ai API limit error
 
   Creation Date:  <01/22/2020>
   Purpose/Change: Add a new Function checkphish.ai
@@ -174,14 +174,20 @@ function Submit-CHECKPHISH {
 	$HEADERS = @{ "Content-Type" = "application/json" }
 	$SCANBODY = @{ "urlInfo" = @{ "url" = "$URL"} ; "apiKey" = "$CHECKPHISH_API_KEY" }
 	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://developers.checkphish.ai/api/neo/scan' -Headers $HEADERS -Body $(convertto-json($SCANBODY))
-	Start-Sleep -s 60
-	$RESULTBODY = @{ "apiKey" = "$CHECKPHISH_API_KEY" ; "jobID" = "$($SCAN.jobID)" ; "insights" = $true }
-	$RESULTS = Invoke-RestMethod -Method 'POST' -Uri 'https://developers.checkphish.ai/api/neo/scan/status' -Headers $HEADERS -Body $(convertto-json($RESULTBODY))
-	Write-OutPut "CheckPhish Scan Report: " >> $LOGFILE
-	Write-OutPut "ScanResultsDisposition:    ",$($RESULTS.disposition) >> $LOGFILE
-	Write-OutPut "ScanReportURL:             ",$($RESULTS.insights) >> $LOGFILE
-	Write-OutPut "ScreenShotURL:             ",$($RESULTS.screenshot_path) >> $LOGFILE
-	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+	if ( ![string]::IsNullOrEmpty($SCAN.errorMessage) ) {
+		Start-Sleep -s 60
+		$RESULTBODY = @{ "apiKey" = "$CHECKPHISH_API_KEY" ; "jobID" = "$($SCAN.jobID)" ; "insights" = $true }
+		$RESULTS = Invoke-RestMethod -Method 'POST' -Uri 'https://developers.checkphish.ai/api/neo/scan/status' -Headers $HEADERS -Body $(convertto-json($RESULTBODY))
+		Write-OutPut "CheckPhish Scan Report: " >> $LOGFILE
+		Write-OutPut "ScanResultsDisposition:    ",$($RESULTS.disposition) >> $LOGFILE
+		Write-OutPut "ScanReportURL:             ",$($RESULTS.insights) >> $LOGFILE
+		Write-OutPut "ScreenShotURL:             ",$($RESULTS.screenshot_path) >> $LOGFILE
+		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+	}else {
+		Write-OutPut "CheckPhish Scan Report: " >> $LOGFILE
+		Write-OutPut $SCAN.errorMessage >> $LOGFILE
+		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+	}
 }
 
 function Google-Safe-Browsing {
@@ -205,7 +211,7 @@ function Submit-URLSCAN {
 	$SCANRESPONSE = Invoke-RestMethod -Method 'POST' -Uri 'https://urlscan.io/api/v1/scan/' -Headers $HEADERS -Body $BODY
 	$RESPONSEAPI = $SCANRESPONSE.api
 	Do {
-		Start-Sleep -s 15
+		Start-Sleep -s 30
 		$RESPONSE = try { $SCANRESULT = Invoke-RestMethod -Method 'GET' -Uri $RESPONSEAPI } catch { $_.Exception.Response.StatusCode.Value__}
     } Until ($RESPONSE -ne 404) 
 	$ReportURL = $SCANRESULT.task.reportURL
@@ -220,7 +226,7 @@ function Submit-URLSCAN {
 function Submit-URL-Virustotal {
 	$BODY = @{ "url" = "$URL"; "apikey" = "$VIRUSTOTAL_API_KEY" }
 	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://www.virustotal.com/vtapi/v2/url/scan' -Body $BODY
-	Start-Sleep -s 15
+	Start-Sleep -s 30
 	$HEADERS = @{ "x-apikey" = "$VIRUSTOTAL_API_KEY" }
 	$BASE64URL = ([System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes("$URL"))).replace('/','_').replace('=','')
 	$SCAN = Invoke-RestMethod -Method 'GET' -Uri "https://www.virustotal.com/api/v3/urls/$BASE64URL" -Headers $HEADERS
@@ -238,7 +244,7 @@ function Submit-FILE-Virustotal {
 	$BODY = @{ "apikey" = "$VIRUSTOTAL_API_KEY"; "file" = "$FILEPATH" }
 	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://www.virustotal.com/vtapi/v2/file/scan' -Body $BODY
 	$HASH = $SCAN.sha256
-	Start-Sleep -s 15
+	Start-Sleep -s 30
 	$HEADERS = @{ "x-apikey" = "$VIRUSTOTAL_API_KEY" }
 	$SCAN = Invoke-RestMethod -Method 'GET' -Uri "https://www.virustotal.com/api/v3/files/$HASH" -Headers $HEADERS
 	$PERMALINK = "https://virustotal.com/gui/file/"+$SCAN.data.id+"/detection"
