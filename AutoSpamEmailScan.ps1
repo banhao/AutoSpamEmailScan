@@ -1,11 +1,11 @@
 
 <#PSScriptInfo
 
-.VERSION 4.1.2
+.VERSION 4.2.0
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
-.AUTHOR banhao@gmail.com
+.AUTHOR HAO BAN/banhao@gmail.com
 
 .COMPANYNAME
 
@@ -19,71 +19,43 @@
 
 .ICONURI
 
-.EXTERNALMODULEDEPENDENCIES 
+.EXTERNALMODULEDEPENDENCIES Before you run the script Install the Exchange Web Services Managed API 2.2. https://www.microsoft.com/en-us/download/details.aspx?id=42951 
 
 .REQUIREDSCRIPTS
 
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <03/10/2020>
+	Purpose/Change: Add a new Function CheckRedirectedURL, this feature is used to detect URLs that try to escape the scan.
+					Change "function Submit-URL-Virustotal" to use the VirusTotal API V3
 
+	Creation Date:  <02/11/2020>
+	Purpose/Change: Add checkphish.ai API limit error
+
+	Creation Date:  <01/22/2020>
+	Purpose/Change: Add a new Function checkphish.ai
+
+	Creation Date:  <10/21/2019>
+	Purpose/Change: One funcation name was changed but calls the old name in the program. Update the Bytescout.PDF2HTML.dll to version 10.6.0.3667. It's still a trial version and will expire after 90 days. If you see this error: 
+	--------------------------------------------------------------------------------------
+	"new-object : Exception calling ".ctor" with "0" argument(s): "Trial period expired."
+	+         $extractor = new-object Bytescout.PDF2HTML.HTMLExtractor
+	--------------------------------------------------------------------------------------
+	That means the DLL file has been expired.
 
 .PRIVATEDATA
 
-#> 
+.DESCRIPTION AutoSpamEmailScan.ps1 is used to monitor a specific mailbox that in enterprise users can forward suspicious spam emails to a specific mailbox.
+	This PowerShell script can monitor the mailbox for any unread emails, grab the URLs and attachments from the emails and submit to virustotal.com, urlscan.io, Google safe browsing and OPSWAT. Script also can extract URLs from a pdf file.
+	After the scan finished, script can generate HTML format scan report and auto reply to the senders.
+	Script can be run once or loop interval, if  in the init.conf is 0 means script will only run one time else the number is the loop interval seconds.
 
+	Visit https://github.com/banhao/AutoSpamEmailScan to get the init.conf and Bytescout.PDF2HTML.dll, this dll file is used to convert PDF to HTML.
 
+	Please check the License before you download this script, if you don't agree with the License please don't download and use this script. https://github.com/banhao/AutoSpamEmailScan/blob/master/LICENSE
 
-
-
-
-
-<# 
-
-.DESCRIPTION 
-AutoSpamEmailScan.ps1 is used to monitor a specific mailbox that in enterprise users can forward suspicious spam emails to a specific mailbox. 
-This PowerShell script can monitor the mailbox for any unread emails, grab the URLs and attachments from the emails and submit to virustotal.com, urlscan.io, Google safe browsing and OPSWAT. Script also can extract URLs from a pdf file. 
-After the scan finished, script can generate HTML format scan report and auto reply to the senders.
-Script can be run once or loop interval, if  in the init.conf is 0 means script will only run one time else the number is the loop interval seconds.
-
-Before you run the script Install the Exchange Web Services Managed API 2.2. 
-https://www.microsoft.com/en-us/download/details.aspx?id=42951 
-
-Visit https://github.com/banhao/AutoSpamEmailScan to get the init.conf and Bytescout.PDF2HTML.dll, this dll file is used to convert PDF to HTML.
-
-Please check the License before you download this script, if you don't agree with the License please don't download and use this script. https://github.com/banhao/AutoSpamEmailScan/blob/master/LICENSE
-
-Update the Bytescout.PDF2HTML.dll to version 10.6.0.3667. It's still a trial version and will expire after 90 days. If you see this error: 
-  --------------------------------------------------------------------------------------
-  "new-object : Exception calling ".ctor" with "0" argument(s): "Trial period expired."
-  At H:\MonitorEmailSecurity\MonitorEmailSecurity.ps1:273 char:16
-  +         $extractor = new-object Bytescout.PDF2HTML.HTMLExtractor
-  --------------------------------------------------------------------------------------
-That means the DLL file has been expired.
-
-#> 
-
-<#
-.SYNOPSIS
-  <>
-
-.DESCRIPTION
-  <>
-
-.PARAMETER <Parameter_Name>
-  <>
-
-.INPUTS
-  <>
-
-.OUTPUTS
-  <>
-
-.NOTES
-  Before start running the script, download the Exchange Web Services Managed API 2.2 and install it.
-  https://www.microsoft.com/en-us/download/details.aspx?id=42951
-  
-  The Password is base64 encoded and saved in init.conf, following is the example about how to genertae the encoded password:
+	The Password is base64 encoded and saved in init.conf, following is the example about how to genertae the encoded password:
 	"JkPgsiG9Zh0XCvk" is the password.
 	"yp9P7" is the salt. make sure salt is the unique string that can't have the same pattern in the password.
 	Insert the salt into password where ever you want:
@@ -98,7 +70,7 @@ That means the DLL file has been expired.
 		SgBrAFAAZwB5AHAAOQBQADcAcwBpAEcAOQBaAGgAMABYAEMAdgBrAA==
 	[Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes("JkPgsiG9Zh0XCyp9P7vk"))
 		SgBrAFAAZwBzAGkARwA5AFoAaAAwAFgAQwB5AHAAOQBQADcAdgBrAA==
-	......
+	
 	Save the encoded string in the init.conf file.
 	
 	Decode the encoded string:
@@ -110,41 +82,24 @@ That means the DLL file has been expired.
 		JkPgyp9P7siG9Zh0XCvk
 	[System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String("SgBrAFAAZwBzAGkARwA5AFoAaAAwAFgAQwB5AHAAOQBQADcAdgBrAA=="))
 		JkPgsiG9Zh0XCyp9P7vk
-	......
-	The trick is even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password.
-  
-  Version:        4.1.2
-  Author:         <HAO BAN/banhao@gmail.com>
+	
+	Even someone can get the encoded string from the init.conf and use base64 to decode it, but they don't know the salt, so they still can't get the password directly.
 
-  Creation Date:  <02/11/2020>
-  Purpose/Change: Add checkphish.ai API limit error
-
-  Creation Date:  <01/22/2020>
-  Purpose/Change: Add a new Function checkphish.ai
-
-  Creation Date:  <10/21/2019>
-  Purpose/Change: One funcation name was changed but calls the old name in the program. Update the Bytescout.PDF2HTML.dll to version 10.6.0.3667. It's still a trial version and will expire after 90 days. If you see this error: 
-  --------------------------------------------------------------------------------------
-  "new-object : Exception calling ".ctor" with "0" argument(s): "Trial period expired."
-  At H:\MonitorEmailSecurity\MonitorEmailSecurity.ps1:273 char:16
-  +         $extractor = new-object Bytescout.PDF2HTML.HTMLExtractor
-  --------------------------------------------------------------------------------------
-  That means the DLL file has been expired.
-  
-.EXAMPLE
-  This PowerShell passed the test in PowerShell version 5.1.16299.1146. Can not run on Powershell version 4 and below.
-  PS H:\>host  
+	This PowerShell passed the test in PowerShell version 5.1.16299.1146. Can not run on Powershell version 4 and below.
+	PS H:\>host  
 	Check the PowerShell version.
- 
+
 #>
+
+
 #-------------------------------------------------------------------------------------------------------------------------------------------------------
 #variables
 cls
 $SALT = $Args[0]
 $ENCODEDPASSWORD = Get-Content .\init.conf | findstr PASSWORD |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
 
-if ( [string]::IsNullOrEmpty($SALT) ){ 
-	$YorN = Read-Host "The salt is empty. Do you want to input the salt to decrypt the password? [ y/n ] (Default is y)" 
+if ( [string]::IsNullOrEmpty($SALT) ){
+	$YorN = Read-Host "The salt is empty. Do you want to input the salt to decrypt the password? [ y/n ] (Default is y)"
 	if ( $YorN -match "[yY]" -or ([string]::IsNullOrEmpty($YorN))){
 		$SALT = Read-Host -assecurestring "Please input the salt"
 		$PASSWORD = ([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD))).Replace($([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SALT))),"")
@@ -197,7 +152,10 @@ function Google-Safe-Browsing {
 	$JSONBODY = $BODY | ConvertTo-Json
 	$Uri = 'https://safebrowsing.googleapis.com/v4/threatMatches:find?key='+ $GOOGLE_API_KEY
 	$Results = Invoke-RestMethod -Method 'POST' -Uri $Uri -Body $JSONBODY -Headers $HEADERS
-	if ( ([string]::IsNullOrEmpty($Results)) ) { Write-OutPut "Can not find the result in Google Safe Browsing Scan."  >> $LOGFILE }else{
+	if ( ([string]::IsNullOrEmpty($Results)) ) {
+		Write-OutPut "Can not find the result in Google Safe Browsing Scan."  >> $LOGFILE
+		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+	 }else{
 		$ThreatType = $Results | select -expand matches | select threatType
 		Write-OutPut "Google Safe Browsing Report: " >> $LOGFILE
 		Write-OutPut "Google Safe Browsing Scan Results:    ",$($ThreatType) >> $LOGFILE
@@ -213,7 +171,7 @@ function Submit-URLSCAN {
 	Do {
 		Start-Sleep -s 30
 		$RESPONSE = try { $SCANRESULT = Invoke-RestMethod -Method 'GET' -Uri $RESPONSEAPI } catch { $_.Exception.Response.StatusCode.Value__}
-    } Until ($RESPONSE -ne 404) 
+	}Until($RESPONSE -ne 404)
 	$ReportURL = $SCANRESULT.task.reportURL
 	$ScreenShot = $SCANRESULT.task.screenshotURL
 	Write-OutPut "URLscan Scan Report: " >> $LOGFILE
@@ -224,19 +182,19 @@ function Submit-URLSCAN {
 }
 
 function Submit-URL-Virustotal {
-	$BODY = @{ "url" = "$URL"; "apikey" = "$VIRUSTOTAL_API_KEY" }
-	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://www.virustotal.com/vtapi/v2/url/scan' -Body $BODY
-	Start-Sleep -s 30
+	$BODY = @{ "url" = "$URL" }
 	$HEADERS = @{ "x-apikey" = "$VIRUSTOTAL_API_KEY" }
-	$BASE64URL = ([System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes("$URL"))).replace('/','_').replace('=','')
-	$SCAN = Invoke-RestMethod -Method 'GET' -Uri "https://www.virustotal.com/api/v3/urls/$BASE64URL" -Headers $HEADERS
-	$PERMALINK = "https://virustotal.com/gui/url/"+$SCAN.data.id+"/detection"
+	$SCAN = Invoke-RestMethod -Method 'POST' -Uri "https://www.virustotal.com/api/v3/urls" -Headers $HEADERS -Body $BODY
+	$RESULTID = $SCAN.data.id |  %{ $_.Split('-')[1]; } | foreach{ $_.ToString().Trim() }
+	$PERMALINK = "https://virustotal.com/gui/url/"+$RESULTID+"/detection"
+	Start-Sleep -s 30
+	$SCANRESULTS = Invoke-RestMethod -Method 'GET' -Uri "https://www.virustotal.com/api/v3/urls/$RESULTID" -Headers $HEADERS
 	Write-OutPut "VirusTotal URL Scan Report: " >> $LOGFILE
 	Write-OutPut $PERMALINK >> $LOGFILE
 	Write-OutPut "VirusTotal URL Scan Stats: " >> $LOGFILE
-	Write-OutPut $SCAN.data.attributes.last_analysis_stats >> $LOGFILE
+	Write-OutPut $SCANRESULTS.data.attributes.last_analysis_stats >> $LOGFILE
 	Write-OutPut "VirusTotal URL COMMUNITY VOTES : " >> $LOGFILE
-	Write-OutPut $SCAN.data.attributes.total_votes >> $LOGFILE
+	Write-OutPut $SCANRESULTS.data.attributes.total_votes >> $LOGFILE
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 }
 
@@ -244,7 +202,7 @@ function Submit-FILE-Virustotal {
 	$BODY = @{ "apikey" = "$VIRUSTOTAL_API_KEY"; "file" = "$FILEPATH" }
 	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://www.virustotal.com/vtapi/v2/file/scan' -Body $BODY
 	$HASH = $SCAN.sha256
-	Start-Sleep -s 30
+	Start-Sleep -s 60
 	$HEADERS = @{ "x-apikey" = "$VIRUSTOTAL_API_KEY" }
 	$SCAN = Invoke-RestMethod -Method 'GET' -Uri "https://www.virustotal.com/api/v3/files/$HASH" -Headers $HEADERS
 	$PERMALINK = "https://virustotal.com/gui/file/"+$SCAN.data.id+"/detection"
@@ -315,12 +273,8 @@ function FromEmailAttachment {
 	foreach ($URL in $URLLIST){ if ( $URL -notin $EXPLIST ){$URLARRAY = $URLARRAY += $URL }}
 	if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
 		foreach($URL in $URLARRAY){ 
-			Write-OutPut "URL:     ",$URL  >> $LOGFILE
-			Submit-URL-Virustotal
-			Submit-URLSCAN
-			Submit-CHECKPHISH
-			Google-Safe-Browsing
-		} 
+			CheckRedirectedURL
+		}
 	}
 	$BOUNDARY = $CdoMessage.Fields.Item("urn:schemas:mailheader:content-type").Value | %{ $_.Split(';')[1]; } | %{ $_.Split('"')[1]; }
 	for ($i=1;$i -le $CdoMessage.Attachments.count;$i++){
@@ -329,7 +283,7 @@ function FromEmailAttachment {
 		$AttachmentPATTERN = """$FILENAME""(.*?)  --$BOUNDARY"
 		$ATTACHDATA = [regex]::match($EMLData, $AttachmentPATTERN).Groups[1].Value
 		if ( ($($ContentMediaType|%{$_.Split('/')[0];}) -eq "application") -and (-not [string]::IsNullOrEmpty($FILENAME))){
-			$TRIMNUM = $ATTACHDATA.LastIndexOf("  ")+2 
+			$TRIMNUM = $ATTACHDATA.LastIndexOf("  ")+2
 			$ATTACHMENTDATA = $ATTACHDATA.Remove(0,$TRIMNUM)
 			$ATTFILENAME = ($DOWNLOADDIRECTORY + $FILENAME)
 			$bytes = [Convert]::FromBase64String($ATTACHMENTDATA)
@@ -344,7 +298,7 @@ function FromEmailAttachment {
 				Write-OutPut "=====================Extract URLs from the PDF file=====================" >> $LOGFILE
 				ExtractURLFromPDFHTML
 			}else{
-				if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){ 
+				if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
 					Submit-FILE-Virustotal
 					Submit-FILE-OPSWAT
 				}
@@ -390,14 +344,49 @@ function ExtractURLFromPDFHTML {
 	# URL is not null or empty do check the URL
 	if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
 		foreach($URL in $URLARRAY){ 
-			Write-OutPut "URL:     ",$URL >> $LOGFILE
+			CheckRedirectedURL
+		}
+	}else{ Write-OutPut "=====================No URL in the PDF/HTML file needs to scan=====================" >> $LOGFILE }
+	$extractor.Reset()
+}
+
+function CheckRedirectedURL {
+	$webRequest = [System.Net.WebRequest]::Create($URL)
+	Try {
+		$webResponse = $webRequest.GetResponse()
+	}
+	Catch [System.Net.WebException] {
+		$ExceptionError = $_.Exception.Message
+	}	
+	
+	if ( [string]::IsNullOrEmpty($ExceptionError) ) {
+		if ( $webResponse.ResponseUri.OriginalString -eq $URL ) {
+			Write-Output "No Redirection, Will scan the Original URL" >> $LOGFILE
 			Submit-URL-Virustotal
 			Submit-URLSCAN
 			Submit-CHECKPHISH
 			Google-Safe-Browsing
-		} 
-	}else{ Write-OutPut "=====================No URL in the PDF/HTML file needs to scan=====================" >> $LOGFILE }
-	$extractor.Reset()
+		}else{
+			Write-Output "The Original URL is:" $URL >> $LOGFILE
+			$URL = $webResponse.ResponseUri.AbsoluteUri
+			Write-OutPut "    |" >> $LOGFILE
+			Write-Output "    |--> The Redirected URL is:" $URL >> $LOGFILE
+			Submit-URL-Virustotal
+			Submit-URLSCAN
+			Submit-CHECKPHISH
+			Google-Safe-Browsing
+		}
+	}else{
+		Write-Output "Exception Error:" $ExceptionError >> $LOGFILE
+		Write-Output "Will scan the Original URL" >> $LOGFILE
+		Submit-URL-Virustotal
+		Submit-URLSCAN
+		Submit-CHECKPHISH
+		Google-Safe-Browsing	
+	}
+		Get-Job | Wait-Job
+	$webResponse.Close()
+	$webResponse.Dispose()
 }
 
 function MAIN {
@@ -412,7 +401,7 @@ function MAIN {
 	$FOLDERID = ($INBOX.FindFolders([Microsoft.Exchange.WebServices.Data.FolderView]::new(10)) | where { $_.DisplayName -eq $SUBFOLDER }).Id.UniqueID
 	$PROPERTYSET = new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties)
 	$PROPERTYSET.RequestedBodyType = [Microsoft.Exchange.WebServices.Data.BodyType]::Text
-	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+	[System.Net.ServicePointManager]::SecurityProtocol = @("Tls12","Tls11","Tls","Ssl3")
 	if ( $INBOX.TotalCount -ne 0 ){
 		$ITEMS = $INBOX.FindItems($INBOX.TotalCount)
 		foreach ( $EMAIL in $ITEMS.Items ){
@@ -437,13 +426,12 @@ function MAIN {
 					foreach ($URL in $URLLIST){ if ( $URL -notin $EXPLIST ){$URLARRAY = $URLARRAY += $URL }}
 					# URL is not null or empty do check the URL
 					if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
-						foreach($URL in $URLARRAY){ 
+						foreach($URL in $URLARRAY){
+							if ( [string]::IsNullOrEmpty($([URI]$URL).Scheme) ) { $URL = "http://"+$URL }
 							Write-OutPut "URL:     ",$URL >> $LOGFILE
-							Submit-URL-Virustotal
-							Submit-URLSCAN
-							Submit-CHECKPHISH
-							Google-Safe-Browsing
-						} 
+							Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+							CheckRedirectedURL
+						}
 					}
 					foreach($ATTACH in $EMAIL.Attachments){
 						if ( ![string]::IsNullOrEmpty($ATTACH.Name)){
@@ -463,29 +451,36 @@ function MAIN {
 								$AttachmentData = $ATTACH.Content
 								$ATTFILENAME = ($DOWNLOADDIRECTORY + $ATTACH.Name.ToString().Trim(""))
 							}
-							$ATTFILE = new-object System.IO.FileStream(($ATTFILENAME), [System.IO.FileMode]::Create)
-							$ATTFILE.Write($AttachmentData, 0, $AttachmentData.Length)
-							$ATTFILE.Close()
-							Write-OutPut "Downloaded Attachment : "  ($ATTFILENAME) >> $LOGFILE
-							$ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm
-							$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
-							$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
-							Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
-							if ( ($EXTENSION -eq ".eml") -or ($EXTENSION -eq ".raw") ){ 
-								FromEmailAttachment $ATTFILENAME
-							} else{				
-								if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") ){
-										Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
-										ExtractURLFromPDFHTML
-										Submit-FILE-Virustotal
-										Submit-FILE-OPSWAT
-								}else{
-									if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){ 
-										Submit-FILE-Virustotal
-										Submit-FILE-OPSWAT
+							Try { $ATTFILE = new-object System.IO.FileStream(($ATTFILENAME), [System.IO.FileMode]::Create) }
+							Catch [System.Net.WebException] { $ExceptionError = $_.Exception.Message }
+							if ( [string]::IsNullOrEmpty($ExceptionError) ) {
+								$ATTFILE.Write($AttachmentData, 0, $AttachmentData.Length)
+								$ATTFILE.Close()
+								Write-OutPut "Downloaded Attachment : "  ($ATTFILENAME) >> $LOGFILE
+								$ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm
+								$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
+								$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
+								Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
+								if ( ($EXTENSION -eq ".eml") -or ($EXTENSION -eq ".raw") ){
+									FromEmailAttachment $ATTFILENAME
+								} else{
+										if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") ){
+											Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
+											ExtractURLFromPDFHTML
+											Submit-FILE-Virustotal
+											Submit-FILE-OPSWAT
+										}else {
+											if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
+												Submit-FILE-Virustotal
+												Submit-FILE-OPSWAT
+											}
+											}
 									}
-								}
-							}
+							} else { 
+									Write-OutPut "********************************************************************" > $LOGFILE
+									Write-Output "Exception Error:" $ExceptionError >> $LOGFILE   
+									Write-OutPut "********************************************************************" > $LOGFILE
+								}		
 						}
 					}
 					Write-OutPut "================================END=================================" >> $LOGFILE
