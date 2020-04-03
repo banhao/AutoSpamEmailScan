@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.2.0
+.VERSION 4.2.1
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,9 +26,12 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <04/2/2020>
+	Purpose/Change: Add new feature to let the use input the credential just chose "N" when prompt "salt is empty". Add SystemException, fix the broken of the system error.
+
 	Creation Date:  <03/10/2020>
 	Purpose/Change: Add a new Function CheckRedirectedURL, this feature is used to detect URLs that try to escape the scan.
-					Change "function Submit-URL-Virustotal" to use the VirusTotal API V3
+	Change "function Submit-URL-Virustotal" to use the VirusTotal API V3
 
 	Creation Date:  <02/11/2020>
 	Purpose/Change: Add checkphish.ai API limit error
@@ -94,8 +97,9 @@
 
 #-------------------------------------------------------------------------------------------------------------------------------------------------------
 #variables
+param ($CREDENTIAL ,$SALT)
 cls
-$SALT = $Args[0]
+
 $ENCODEDPASSWORD = Get-Content .\init.conf | findstr PASSWORD |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
 
 if ( [string]::IsNullOrEmpty($SALT) ){
@@ -289,20 +293,27 @@ function FromEmailAttachment {
 			$bytes = [Convert]::FromBase64String($ATTACHMENTDATA)
 			[IO.File]::WriteAllBytes($ATTFILENAME, $bytes)
 			Write-OutPut "Downloaded Attachment : "  ($ATTFILENAME) >> $LOGFILE
-			$ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm
-			$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
-			$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
-			Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
-			$EXTENSION = [System.IO.Path]::GetExtension($ATTFILENAME)
-			if ( $EXTENSION -eq ".pdf" ){
-				Write-OutPut "=====================Extract URLs from the PDF file=====================" >> $LOGFILE
-				ExtractURLFromPDFHTML
-			}else{
-				if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
-					Submit-FILE-Virustotal
-					Submit-FILE-OPSWAT
+			Try { $ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm }
+			Catch [System.SystemException] { $ExceptionError = $_.Exception.Message }
+			if ( [string]::IsNullOrEmpty($ExceptionError) ) {
+				$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
+				$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
+				Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
+				$EXTENSION = [System.IO.Path]::GetExtension($ATTFILENAME)
+				if ( $EXTENSION -eq ".pdf" ){
+					Write-OutPut "=====================Extract URLs from the PDF file=====================" >> $LOGFILE
+					ExtractURLFromPDFHTML
+				}else{
+					if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
+						Submit-FILE-Virustotal
+						Submit-FILE-OPSWAT
+					}
+					}
+			} else {
+				Write-OutPut "********************************************************************" > $LOGFILE
+				Write-Output "Exception Error:" $ExceptionError >> $LOGFILE   
+				Write-OutPut "********************************************************************" > $LOGFILE
 				}
-			}	
 		}
 	}
 }
@@ -386,7 +397,6 @@ function CheckRedirectedURL {
 	}
 		Get-Job | Wait-Job
 	$webResponse.Close()
-	$webResponse.Dispose()
 }
 
 function MAIN {
@@ -395,7 +405,10 @@ function MAIN {
 	If(!(test-path $REPORTSDIRECTORY)){ New-Item -ItemType directory -Path $REPORTSDIRECTORY }
 	Import-Module $EWSDLLPATH
 	$SERVICE = New-Object Microsoft.Exchange.WebServices.Data.ExchangeService([Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2010_SP2)
-	$SERVICE.Credentials = New-Object Net.NetworkCredential($USERNAME, $PASSWORD, $DOMAIN)
+	if ( [string]::IsNullOrEmpty($SALT) -and [string]::IsNullOrEmpty($CREDENTIAL) ){
+		$CREDENTIAL = Get-Credential
+		$SERVICE.Credentials = New-Object Net.NetworkCredential($CREDENTIAL.UserName, $CREDENTIAL.Password, $DOMAIN)
+	}else{ $SERVICE.Credentials = New-Object Net.NetworkCredential($USERNAME, $PASSWORD, $DOMAIN) }
 	$SERVICE.AutodiscoverUrl($EMAILADDRESS)
 	$INBOX = [Microsoft.Exchange.WebServices.Data.Folder]::Bind($SERVICE,[Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::Inbox)
 	$FOLDERID = ($INBOX.FindFolders([Microsoft.Exchange.WebServices.Data.FolderView]::new(10)) | where { $_.DisplayName -eq $SUBFOLDER }).Id.UniqueID
@@ -452,31 +465,38 @@ function MAIN {
 								$ATTFILENAME = ($DOWNLOADDIRECTORY + $ATTACH.Name.ToString().Trim(""))
 							}
 							Try { $ATTFILE = new-object System.IO.FileStream(($ATTFILENAME), [System.IO.FileMode]::Create) }
-							Catch [System.Net.WebException] { $ExceptionError = $_.Exception.Message }
+							Catch [System.SystemException] { $ExceptionError = $_.Exception.Message }
 							if ( [string]::IsNullOrEmpty($ExceptionError) ) {
 								$ATTFILE.Write($AttachmentData, 0, $AttachmentData.Length)
 								$ATTFILE.Close()
 								Write-OutPut "Downloaded Attachment : "  ($ATTFILENAME) >> $LOGFILE
-								$ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm
-								$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
-								$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
-								Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
-								if ( ($EXTENSION -eq ".eml") -or ($EXTENSION -eq ".raw") ){
-									FromEmailAttachment $ATTFILENAME
-								} else{
-										if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") ){
-											Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
-											ExtractURLFromPDFHTML
-											Submit-FILE-Virustotal
-											Submit-FILE-OPSWAT
-										}else {
-											if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
+								Try { $ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm }
+								Catch [System.SystemException] { $ExceptionError = $_.Exception.Message }
+								if ( [string]::IsNullOrEmpty($ExceptionError) ) {
+									$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
+									$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
+									Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
+									if ( ($EXTENSION -eq ".eml") -or ($EXTENSION -eq ".raw") ){
+										FromEmailAttachment $ATTFILENAME
+									} else{
+											if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") ){
+												Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
+												ExtractURLFromPDFHTML
 												Submit-FILE-Virustotal
 												Submit-FILE-OPSWAT
-											}
-											}
+											}else {
+												if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
+													Submit-FILE-Virustotal
+													Submit-FILE-OPSWAT
+												}
+												}
+										}
+								} else {
+									Write-OutPut "********************************************************************" > $LOGFILE
+									Write-Output "Exception Error:" $ExceptionError >> $LOGFILE   
+									Write-OutPut "********************************************************************" > $LOGFILE
 									}
-							} else { 
+							} else {
 									Write-OutPut "********************************************************************" > $LOGFILE
 									Write-Output "Exception Error:" $ExceptionError >> $LOGFILE   
 									Write-OutPut "********************************************************************" > $LOGFILE
