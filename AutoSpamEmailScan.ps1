@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.2.1
+.VERSION 4.2.2
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <04/3/2020>
+	Purpose/Change: Optimize the parameters setting.
+
 	Creation Date:  <04/2/2020>
 	Purpose/Change: Add new feature to let the use input the credential just chose "N" when prompt "salt is empty". Add SystemException, fix the broken of the system error.
 
@@ -97,20 +100,38 @@
 
 #-------------------------------------------------------------------------------------------------------------------------------------------------------
 #variables
-param ($CREDENTIAL ,$SALT)
+param ($CREDENTIAL,$SALT)
 cls
 
-$ENCODEDPASSWORD = Get-Content .\init.conf | findstr PASSWORD |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
-
-if ( [string]::IsNullOrEmpty($SALT) ){
-	$YorN = Read-Host "The salt is empty. Do you want to input the salt to decrypt the password? [ y/n ] (Default is y)"
+if ( [string]::IsNullOrEmpty($CREDENTIAL) -and [string]::IsNullOrEmpty($SALT) ){
+	$YorN = Read-Host "Do you want to input the Credential? [ y/n ] (Default is y)"
 	if ( $YorN -match "[yY]" -or ([string]::IsNullOrEmpty($YorN))){
-		$SALT = Read-Host -assecurestring "Please input the salt"
-		$PASSWORD = ([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD))).Replace($([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SALT))),"")
-	}else{ $PASSWORD = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD)) }
-}else { $PASSWORD = ([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD))).Replace($SALT,"") }
-
-$USERNAME = Get-Content .\init.conf | findstr USERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+		$CREDENTIAL = Get-Credential
+		$USERNAME = $CREDENTIAL.UserName
+		$PASSWORD = $CREDENTIAL.Password
+	}else{
+		$ENCODEDPASSWORD = Get-Content .\init.conf | findstr PASSWORD |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
+		$USERNAME = Get-Content .\init.conf | findstr USERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+		if ( [string]::IsNullOrEmpty($SALT) ){
+			$YorN = Read-Host "The salt is empty. Do you want to input the salt to decrypt the password? [ y/n ] (Default is y)"
+			if ( $YorN -match "[yY]" -or ([string]::IsNullOrEmpty($YorN))){
+				$SALT = Read-Host -assecurestring "Please input the salt"
+				$PASSWORD = ([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD))).Replace($([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SALT))),"")
+			}else{ $PASSWORD = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD)) }
+		}else { $PASSWORD = ([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD))).Replace($SALT,"") }
+	}
+}else{
+	$ENCODEDPASSWORD = Get-Content .\init.conf | findstr PASSWORD |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
+	$USERNAME = Get-Content .\init.conf | findstr USERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+	if ( [string]::IsNullOrEmpty($SALT) ){
+		$YorN = Read-Host "The salt is empty. Do you want to input the salt to decrypt the password? [ y/n ] (Default is y)"
+		if ( $YorN -match "[yY]" -or ([string]::IsNullOrEmpty($YorN))){
+			$SALT = Read-Host -assecurestring "Please input the salt"
+			$PASSWORD = ([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD))).Replace($([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SALT))),"")
+		}else{ $PASSWORD = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD)) }
+	}else { $PASSWORD = ([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD))).Replace($SALT,"") }
+}
+	
 $DOMAIN = Get-Content .\init.conf | findstr DOMAIN |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EMAILADDRESS = Get-Content .\init.conf | findstr EMAILADDRESS |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EXCHANGESRV = Get-Content .\init.conf | findstr EXCHANGESRV |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
@@ -405,10 +426,7 @@ function MAIN {
 	If(!(test-path $REPORTSDIRECTORY)){ New-Item -ItemType directory -Path $REPORTSDIRECTORY }
 	Import-Module $EWSDLLPATH
 	$SERVICE = New-Object Microsoft.Exchange.WebServices.Data.ExchangeService([Microsoft.Exchange.WebServices.Data.ExchangeVersion]::Exchange2010_SP2)
-	if ( [string]::IsNullOrEmpty($SALT) -and [string]::IsNullOrEmpty($CREDENTIAL) ){
-		$CREDENTIAL = Get-Credential
-		$SERVICE.Credentials = New-Object Net.NetworkCredential($CREDENTIAL.UserName, $CREDENTIAL.Password, $DOMAIN)
-	}else{ $SERVICE.Credentials = New-Object Net.NetworkCredential($USERNAME, $PASSWORD, $DOMAIN) }
+	$SERVICE.Credentials = New-Object Net.NetworkCredential($USERNAME, $PASSWORD, $DOMAIN)
 	$SERVICE.AutodiscoverUrl($EMAILADDRESS)
 	$INBOX = [Microsoft.Exchange.WebServices.Data.Folder]::Bind($SERVICE,[Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::Inbox)
 	$FOLDERID = ($INBOX.FindFolders([Microsoft.Exchange.WebServices.Data.FolderView]::new(10)) | where { $_.DisplayName -eq $SUBFOLDER }).Id.UniqueID
