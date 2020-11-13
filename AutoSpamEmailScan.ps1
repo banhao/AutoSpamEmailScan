@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.2.2
+.VERSION 4.3.0
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <11/10/2020>
+	Purpose/Change: Move emails to sub-folder when after the checking.
+
 	Creation Date:  <04/3/2020>
 	Purpose/Change: Optimize the parameters setting.
 
@@ -106,8 +109,8 @@ cls
 if ( [string]::IsNullOrEmpty($CREDENTIAL) -and [string]::IsNullOrEmpty($SALT) ){
 	$YorN = Read-Host "Do you want to input the Credential? [ y/n ] (Default is y)"
 	if ( $YorN -match "[yY]" -or ([string]::IsNullOrEmpty($YorN))){
-		$CREDENTIAL = Get-Credential
-		$USERNAME = $CREDENTIAL.UserName
+		$USERNAME = Get-Content .\init.conf | findstr USERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+		$CREDENTIAL = Get-Credential -credential $USERNAME
 		$PASSWORD = $CREDENTIAL.Password
 	}else{
 		$ENCODEDPASSWORD = Get-Content .\init.conf | findstr PASSWORD |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
@@ -429,7 +432,8 @@ function MAIN {
 	$SERVICE.Credentials = New-Object Net.NetworkCredential($USERNAME, $PASSWORD, $DOMAIN)
 	$SERVICE.AutodiscoverUrl($EMAILADDRESS)
 	$INBOX = [Microsoft.Exchange.WebServices.Data.Folder]::Bind($SERVICE,[Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::Inbox)
-	$FOLDERID = ($INBOX.FindFolders([Microsoft.Exchange.WebServices.Data.FolderView]::new(10)) | where { $_.DisplayName -eq $SUBFOLDER }).Id.UniqueID
+	$FOLDERROOT = [Microsoft.Exchange.WebServices.Data.Folder]::Bind($SERVICE,[Microsoft.Exchange.WebServices.Data.WellKnownFolderName]::msgFolderRoot)
+	$SUBFOLDERID = ($FOLDERROOT.FindFolders([Microsoft.Exchange.WebServices.Data.FolderView]100) | where { $_.DisplayName -eq $SUBFOLDER }).Id
 	$PROPERTYSET = new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties)
 	$PROPERTYSET.RequestedBodyType = [Microsoft.Exchange.WebServices.Data.BodyType]::Text
 	[System.Net.ServicePointManager]::SecurityProtocol = @("Tls12","Tls11","Tls","Ssl3")
@@ -533,6 +537,7 @@ function MAIN {
 			}
 			$EMAIL.isRead = $true
 			$EMAIL.Update([Microsoft.Exchange.WebServices.Data.ConflictResolutionMode]::AutoResolve)
+			$EMAIL.Move($SUBFOLDERID)
 		}
 	}else{ Write-OutPut "==============There is no email in the inbox==================" }
 }
