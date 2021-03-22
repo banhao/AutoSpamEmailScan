@@ -1,5 +1,7 @@
 Version:4.4.0
+
 If you have Cisco Email Security Appliance in your environment above version 13.5.2 there's a new feature called "Spam Quarantine SafeList and BlockList".
+
 By working with the "Cisco Email Reporting Plug-in" for Outlook, you can let the end users to block spam emails by one click.
 
 # AutoSpamEmailScan
