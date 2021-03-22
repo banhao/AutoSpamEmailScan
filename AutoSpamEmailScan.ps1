@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.3.0
+.VERSION 4.4.0
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <03/19/2021>
+	Purpose/Change: Add a new module for Cisco Email Security Appliance Spam Quarantine Blacklist.
+
 	Creation Date:  <11/10/2020>
 	Purpose/Change: Move emails to sub-folder when after the checking.
 
@@ -146,12 +149,22 @@ $EXTENSIONARRAY = Get-Content .\init.conf | findstr EXTENSIONARRAY |  %{ $_.Spli
 $EXEMPTURL = (Get-Content .\init.conf | findstr EXEMPTURL |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }).split(",")
 $SUBFOLDER = Get-Content .\init.conf | findstr SUBFOLDER | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $INTERVAL = [int]$(Get-Content .\init.conf | findstr INTERVAL | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() })
+$ENABLEESASPAMBL  = $(Get-Content .\init.conf | findstr ENABLEESASPAMBL | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }).ToLower()
+$ESAURL1 = Get-Content .\init.conf | findstr ESAURL1 | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$ESAURL2 = Get-Content .\init.conf | findstr ESAURL2 | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+
 
 $VIRUSTOTAL_API_KEY = Get-Content .\init.conf | findstr VIRUSTOTAL_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $URLSCAN_API_KEY = Get-Content .\init.conf | findstr URLSCAN_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $GOOGLE_API_KEY = Get-Content .\init.conf | findstr GOOGLE_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $OPSWAT_API_KEY = Get-Content .\init.conf | findstr OPSWAT_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $CHECKPHISH_API_KEY = Get-Content .\init.conf | findstr CHECKPHISH_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+
+if ( $ENABLEESASPAMBL -eq "true"){
+	$ESAUSERNAME = Read-Host "Please input the ESA Username"
+	$ESAPASSWORD = Read-Host -assecurestring "Please input the Password"
+	$ESACREDENTIAL = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($ESAUSERNAME+":"+$([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($ESAPASSWORD)))))
+}
 
 function Submit-CHECKPHISH {
 	$HEADERS = @{ "Content-Type" = "application/json" }
@@ -292,6 +305,11 @@ function FromEmailAttachment {
 	Write-OutPut "===Subject:    ",$($CdoMessage.Subject) >> $LOGFILE
 	Write-OutPut "===DateTimeReceived:    ",$($CdoMessage.SentOn) >> $LOGFILE
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+	if ( $ENABLEESASPAMBL -eq "true"){
+		if ( ($EMAIL.ToRecipients.Address -eq "virus@dc-s-esav-112.ehealthsask.ca") -or ($EMAIL.ToRecipients.Address -eq "phish@dc-s-esav-112.ehealthsask.ca") -or ($EMAIL.ToRecipients.Address -eq "spam@dc-s-esav-112.ehealthsask.ca") -or ($EMAIL.ToRecipients.Address -eq "marketing@dc-s-esav-112.ehealthsask.ca") ){
+			ESASpamQuarantine
+		}
+	}
 	$TextBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:textdescription").Value
 	$HTMLBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:htmldescription").Value
 	$EmailBODY = $TextBody + $HTMLBody
@@ -341,6 +359,50 @@ function FromEmailAttachment {
 		}
 	}
 }
+
+function ESASpamQuarantine {
+	$regex = [regex]"\<(.*)\>"
+	$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
+	if ( ($EMAIL.ToRecipients.Address -eq "virus@dc-s-esav-112.ehealthsask.ca") -or ($EMAIL.ToRecipients.Address -eq "phish@dc-s-esav-112.ehealthsask.ca") ){
+		$Blocklist_recipient = $('.*@'+$regex.match($($CdoMessage.To)).Groups[1].value.split("@")[1]).ToLower()
+		$Blocklist_recipient_domain = $('.*@'+$regex.match($($CdoMessage.To)).Groups[1].value.split("@")[1]).ToLower()
+
+	}else{
+		if ( ($EMAIL.ToRecipients.Address -eq "spam@dc-s-esav-112.ehealthsask.ca") -or ($EMAIL.ToRecipients.Address -eq "marketing@dc-s-esav-112.ehealthsask.ca") ){
+			$Blocklist_recipient = $($regex.match($($CdoMessage.To)).Groups[1].value).ToLower()
+			$Blocklist_recipient_domain = $('.*@'+$regex.match($($CdoMessage.To)).Groups[1].value.split("@")[1]).ToLower()
+		}
+	}
+	$HEADERS = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+	$HEADERS.Add("Authorization", "Basic $ESACREDENTIAL")
+	$HEADERS.Add("Content-Type", "text/plain")
+	$SenderList = $(Invoke-RestMethod -Method 'GET' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist?action=view&quarantineType=spam&viewBy=recipient&search=$Blocklist_recipient" -Headers $HEADERS).data.senderList
+	$SenderList_domain = $(Invoke-RestMethod -Method 'GET' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist?action=view&quarantineType=spam&viewBy=recipient&search=$Blocklist_recipient_domain" -Headers $HEADERS).data.senderList
+	if ( ([string]::IsNullOrEmpty($SenderList)) -and ([string]::IsNullOrEmpty($SenderList_domain)) ){
+		$BODY = "{ `n`"action`": `"add`", `n`"quarantineType`": `"spam`", `n`"viewBy`": `"recipient`", `n`"senderList`":  [`"$Blocklist_Sender`"], `n`"recipientAddresses`": [`"$Blocklist_recipient`"] }"
+		$Response_1 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
+		$Response_2 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL2/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
+		Write-OutPut "********************************************************************" > $LOGFILE
+		Write-Output $Response_1 | ConvertTo-Json >> $LOGFILE
+		Write-Output $Response_2 | ConvertTo-Json >> $LOGFILE
+		Write-OutPut "********************************************************************" > $LOGFILE
+	}else{
+		if ( ($Blocklist_Sender -in $SenderList) -or ($Blocklist_Sender -in $SenderList_domain) ){
+			Write-OutPut "********************************************************************" > $LOGFILE
+			Write-OutPut "$Blocklist_Sender was already blocked in $Blocklist_recipient Blocklist." >> $LOGFILE
+			Write-OutPut "********************************************************************" > $LOGFILE
+		}else{
+			$BODY = "{ `n`"action`": `"append`", `n`"quarantineType`": `"spam`", `n`"viewBy`": `"sender`", `n`"senderAddresses`":  [`"$Blocklist_Sender`"], `n`"recipientList`": [`"$Blocklist_recipient`"] }"
+			$Response_1 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
+			$Response_2 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL2/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
+			Write-OutPut "********************************************************************" > $LOGFILE
+			Write-Output $Response_1 | ConvertTo-Json >> $LOGFILE
+			Write-Output $Response_2 | ConvertTo-Json >> $LOGFILE   
+			Write-OutPut "********************************************************************" > $LOGFILE
+		}
+	}
+}
+
 
 function ConvertLogToHTML {
 	$File = Get-Content $LOGFILE
