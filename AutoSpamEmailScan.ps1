@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.4.0
+.VERSION 4.4.1
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <03/25/2021>
+	Purpose/Change: Update function CheckRedirectedURL{}
+
 	Creation Date:  <03/19/2021>
 	Purpose/Change: Add a new module for Cisco Email Security Appliance Spam Quarantine Blacklist.
 
@@ -382,23 +385,23 @@ function ESASpamQuarantine {
 		$BODY = "{ `n`"action`": `"add`", `n`"quarantineType`": `"spam`", `n`"viewBy`": `"recipient`", `n`"senderList`":  [`"$Blocklist_Sender`"], `n`"recipientAddresses`": [`"$Blocklist_recipient`"] }"
 		$Response_1 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
 		$Response_2 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL2/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
-		Write-OutPut "********************************************************************" > $LOGFILE
+		Write-OutPut "********************************************************************" >> $LOGFILE
 		Write-Output $Response_1 | ConvertTo-Json >> $LOGFILE
 		Write-Output $Response_2 | ConvertTo-Json >> $LOGFILE
-		Write-OutPut "********************************************************************" > $LOGFILE
+		Write-OutPut "********************************************************************" >> $LOGFILE
 	}else{
 		if ( ($Blocklist_Sender -in $SenderList) -or ($Blocklist_Sender -in $SenderList_domain) ){
-			Write-OutPut "********************************************************************" > $LOGFILE
+			Write-OutPut "********************************************************************" >> $LOGFILE
 			Write-OutPut "$Blocklist_Sender was already blocked in $Blocklist_recipient Blocklist." >> $LOGFILE
-			Write-OutPut "********************************************************************" > $LOGFILE
+			Write-OutPut "********************************************************************" >> $LOGFILE
 		}else{
 			$BODY = "{ `n`"action`": `"append`", `n`"quarantineType`": `"spam`", `n`"viewBy`": `"sender`", `n`"senderAddresses`":  [`"$Blocklist_Sender`"], `n`"recipientList`": [`"$Blocklist_recipient`"] }"
 			$Response_1 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
 			$Response_2 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL2/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
-			Write-OutPut "********************************************************************" > $LOGFILE
+			Write-OutPut "********************************************************************" >> $LOGFILE
 			Write-Output $Response_1 | ConvertTo-Json >> $LOGFILE
 			Write-Output $Response_2 | ConvertTo-Json >> $LOGFILE   
-			Write-OutPut "********************************************************************" > $LOGFILE
+			Write-OutPut "********************************************************************" >> $LOGFILE
 		}
 	}
 }
@@ -449,6 +452,7 @@ function ExtractURLFromPDFHTML {
 
 function CheckRedirectedURL {
 	$webRequest = [System.Net.WebRequest]::Create($URL)
+	$webRequest.AllowAutoRedirect=$false
 	Try {
 		$webResponse = $webRequest.GetResponse()
 	}
@@ -457,21 +461,23 @@ function CheckRedirectedURL {
 	}	
 	
 	if ( [string]::IsNullOrEmpty($ExceptionError) ) {
-		if ( $webResponse.ResponseUri.OriginalString -eq $URL ) {
-			Write-Output "No Redirection, Will scan the Original URL" >> $LOGFILE
-			Submit-URL-Virustotal
-			Submit-URLSCAN
-			Submit-CHECKPHISH
-			Google-Safe-Browsing
-		}else{
+		if ( ($webResponse.StatusCode -eq "Found") -or ($webResponse.StatusCode -eq "Redirect") ) {
 			Write-Output "The Original URL is:" $URL >> $LOGFILE
-			$URL = $webResponse.ResponseUri.AbsoluteUri
+			$URL = $webResponse.GetResponseHeader("Location")	
 			Write-OutPut "    |" >> $LOGFILE
 			Write-Output "    |--> The Redirected URL is:" $URL >> $LOGFILE
 			Submit-URL-Virustotal
 			Submit-URLSCAN
 			Submit-CHECKPHISH
 			Google-Safe-Browsing
+		}else{
+			if ( $webResponse.ResponseUri.OriginalString -eq $webResponse.ResponseUri.AbsoluteUri )  {
+				Write-Output "No Redirection, Will scan the Original URL" >> $LOGFILE
+				Submit-URL-Virustotal
+				Submit-URLSCAN
+				Submit-CHECKPHISH
+				Google-Safe-Browsing
+			}
 		}
 	}else{
 		Write-Output "Exception Error:" $ExceptionError >> $LOGFILE
