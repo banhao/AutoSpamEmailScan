@@ -1,3 +1,7 @@
+Version:4.4.1
+
+Update function CheckRedirectedURL{}
+
 Version:4.4.0
 
 If you have Cisco Email Security Appliance in your environment above version 13.5.2 there's a new feature called "Spam Quarantine SafeList and BlockList".
