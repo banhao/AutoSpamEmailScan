@@ -1,3 +1,5 @@
+<img src="/procedure.jpg">
+
 Version:4.4.1
 
 Update function CheckRedirectedURL{}
