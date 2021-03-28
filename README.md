@@ -55,7 +55,7 @@ And also can custom the action when end users click the different buttons.
         <copyAddressOriginal />
       </reportType>
       <reportType name="phish">
-        <address>phish@dcompany.com</address>
+        <address>phish@company.com</address>
         <copyAddressInPlainFormat />
         <headerValue>phish</headerValue>
         <showInDeletedFolder>true</showInDeletedFolder>
