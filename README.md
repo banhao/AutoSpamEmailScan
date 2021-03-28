@@ -6,6 +6,77 @@ I prefer to use "Cisco Email Reporting Plug-in" which you can custom the button.
 
 <img src="/plug-in.jpg">
 
+And also can custom the action when end users click the different buttons.
+
+```
+<?xml version="1.0" encoding="utf-8"?>
+<reporting xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <reportingComponent>
+    <lockUiOptions>false</lockUiOptions>
+    <enabled>true</enabled>
+    <keepSentReports>true</keepSentReports>
+    <report>
+      <format>plain</format>
+      <subject>Cisco Email Reporting Plug-in Report ${reportType}</subject>
+    </report>
+    <maxMailSize>1005000</maxMailSize>
+    <attachmentName>orig_mas.raw</attachmentName>
+    <showReportSuccessOne>true</showReportSuccessOne>
+    <showReportSuccessMultiple>true</showReportSuccessMultiple>
+    <addExplorerCommandBar>true</addExplorerCommandBar>
+    <addInspectorCommandBar>true</addInspectorCommandBar>
+    <addContextMenu>true</addContextMenu>
+    <reportTypes>
+      <reportType name="spam">
+        <address>spam@company.com</address>
+        <copyAddressInPlainFormat />
+        <headerValue>spam</headerValue>
+        <showInDeletedFolder>false</showInDeletedFolder>
+        <showInJunkFolder>true</showInJunkFolder>
+        <largeRibbonButton>true</largeRibbonButton>
+        <copyAddressOriginal />
+      </reportType>
+      <reportType name="ham">
+        <address>ham@company.com</address>
+        <copyAddressInPlainFormat />
+        <headerValue>ham</headerValue>
+        <showInDeletedFolder>false</showInDeletedFolder>
+        <showInJunkFolder>false</showInJunkFolder>
+        <largeRibbonButton>true</largeRibbonButton>
+        <copyAddressOriginal />
+      </reportType>
+      <reportType name="virus">
+        <address>virus@company.com</address>
+        <copyAddressInPlainFormat />
+        <headerValue>virus</headerValue>
+        <showInDeletedFolder>true</showInDeletedFolder>
+        <showInJunkFolder>false</showInJunkFolder>
+        <largeRibbonButton>false</largeRibbonButton>
+        <copyAddressOriginal />
+      </reportType>
+      <reportType name="phish">
+        <address>phish@dcompany.com</address>
+        <copyAddressInPlainFormat />
+        <headerValue>phish</headerValue>
+        <showInDeletedFolder>true</showInDeletedFolder>
+        <showInJunkFolder>false</showInJunkFolder>
+        <largeRibbonButton>true</largeRibbonButton>
+        <copyAddressOriginal />
+      </reportType>
+      <reportType name="marketing">
+        <address>marketing@company.com</address>
+        <copyAddressInPlainFormat />
+        <headerValue>marketing</headerValue>
+        <showInDeletedFolder>false</showInDeletedFolder>
+        <showInJunkFolder>true</showInJunkFolder>
+        <largeRibbonButton>true</largeRibbonButton>
+        <copyAddressOriginal />
+      </reportType>
+    </reportTypes>
+  </reportingComponent>
+</reporting>
+```
+
 Version:4.4.1
 
 Update function CheckRedirectedURL{}
