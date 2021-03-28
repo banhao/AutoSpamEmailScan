@@ -1,5 +1,11 @@
 <img src="/procedure.jpg">
 
+There are 2 ways to intergrate the Plug-in on Office Outlook. "Cisco Email Reporting Plug-in" and "NotifySecurity" which I forked "https://github.com/banhao/NotifySecurity"
+
+I prefer to use "Cisco Email Reporting Plug-in" which you can custom the button.
+
+<img src="/plug-in.jpg">
+
 Version:4.4.1
 
 Update function CheckRedirectedURL{}
