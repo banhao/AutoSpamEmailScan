@@ -1,3 +1,13 @@
+Notice: "Cisco Email Reporting Plug-in" or "NotifySecurity" Plug-in are not necessary. It's just optional for the end users to have the one-click ability. Without these plug-ins the end users still can forwatd the spam emails to a specific mail box for the investigation.
+
+But I still recommend to use "Cisco Email Reporting Plug-in" because after custom the buttons you can do lots of things.
+
+Imagine the following scenario: You have an email security poolicy in your company that all encrypted email will be quarantined by Cisco ESA because the attackers will use encrypted emails to bypass the security inspection. The end users will receive an notification email and asked them to confirm that they known the sender and it's a business related email and they are expecting this email. Then the end users forward the notification email to the Service Desk or Security Team to ask releasing the email from the quarantine. 
+
+So you can involve this "Cisco Email Reporting Plug-in" and make it automatically. You can custom one button and display as "Release this email", when the end users click this button on the notification email, it will be encapsulated as a raw-data and forward to "releaseemail@yourconpany.com". You can run a script to monitor "releaseemail@yourconpany.com" and grab the information from the email and call the ESA API to release the emails from the quarantine.
+
+“AutoSpamEmailScan.ps1” is using the same manner to call the ESA API to build a blocklist for the enduses.
+
 <img src="/procedure.jpg">
 
 There are 2 ways to intergrate the Plug-in on Office Outlook. "Cisco Email Reporting Plug-in" and "NotifySecurity" which I forked "https://github.com/banhao/NotifySecurity"
