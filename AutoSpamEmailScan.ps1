@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.4.1
+.VERSION 4.4.2
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <04/05/2021>
+	Purpose/Change: Optimize function CheckRedirectedURL{}
+
 	Creation Date:  <03/25/2021>
 	Purpose/Change: Update function CheckRedirectedURL{}
 
@@ -170,6 +173,7 @@ if ( $ENABLEESASPAMBL -eq "true"){
 }
 
 function Submit-CHECKPHISH {
+	Write-OutPut "CheckPhish Scan Report: " >> $LOGFILE
 	$HEADERS = @{ "Content-Type" = "application/json" }
 	$SCANBODY = @{ "urlInfo" = @{ "url" = "$URL"} ; "apiKey" = "$CHECKPHISH_API_KEY" }
 	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://developers.checkphish.ai/api/neo/scan' -Headers $HEADERS -Body $(convertto-json($SCANBODY))
@@ -177,19 +181,18 @@ function Submit-CHECKPHISH {
 		Start-Sleep -s 60
 		$RESULTBODY = @{ "apiKey" = "$CHECKPHISH_API_KEY" ; "jobID" = "$($SCAN.jobID)" ; "insights" = $true }
 		$RESULTS = Invoke-RestMethod -Method 'POST' -Uri 'https://developers.checkphish.ai/api/neo/scan/status' -Headers $HEADERS -Body $(convertto-json($RESULTBODY))
-		Write-OutPut "CheckPhish Scan Report: " >> $LOGFILE
 		Write-OutPut "ScanResultsDisposition:    ",$($RESULTS.disposition) >> $LOGFILE
 		Write-OutPut "ScanReportURL:             ",$($RESULTS.insights) >> $LOGFILE
 		Write-OutPut "ScreenShotURL:             ",$($RESULTS.screenshot_path) >> $LOGFILE
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	}else {
-		Write-OutPut "CheckPhish Scan Report: " >> $LOGFILE
 		Write-OutPut $SCAN.errorMessage >> $LOGFILE
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	}
 }
 
 function Google-Safe-Browsing {
+	Write-OutPut "Google Safe Browsing Scan Report: " >> $LOGFILE
 	$BODY = @()
 	$BODY +=[pscustomobject]@{"client" = @{"clientId" = "company"; "clientVersion" = "1.0"}; "threatInfo" = @{"threatTypes" = "MALWARE","SOCIAL_ENGINEERING"; "platformTypes" = "WINDOWS"; "threatEntryTypes" = "URL"; "threatEntries" = @{"url" = "$URL"}}}
 	$HEADERS = @{ 'Content-Type' = "application/json" }
@@ -201,28 +204,38 @@ function Google-Safe-Browsing {
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	 }else{
 		$ThreatType = $Results | select -expand matches | select threatType
-		Write-OutPut "Google Safe Browsing Report: " >> $LOGFILE
 		Write-OutPut "Google Safe Browsing Scan Results:    ",$($ThreatType) >> $LOGFILE
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	}
 }
 
 function Submit-URLSCAN {
+	Write-OutPut "URLscan Scan Report: " >> $LOGFILE
 	$BODY = @{ 'url' = "$URL"; 'public' = 'on' }
 	$HEADERS = @{ 'API-Key' = "$URLSCAN_API_KEY" }
-	$SCANRESPONSE = Invoke-RestMethod -Method 'POST' -Uri 'https://urlscan.io/api/v1/scan/' -Headers $HEADERS -Body $BODY
-	$RESPONSEAPI = $SCANRESPONSE.api
-	Do {
-		Start-Sleep -s 30
-		$RESPONSE = try { $SCANRESULT = Invoke-RestMethod -Method 'GET' -Uri $RESPONSEAPI } catch { $_.Exception.Response.StatusCode.Value__}
-	}Until($RESPONSE -ne 404)
-	$ReportURL = $SCANRESULT.task.reportURL
-	$ScreenShot = $SCANRESULT.task.screenshotURL
-	Write-OutPut "URLscan Scan Report: " >> $LOGFILE
-	Write-OutPut "ScanReportURL:     ",$($ReportURL) >> $LOGFILE
-	Write-OutPut "ScreenShotURL:     ",$($ScreenShot) >> $LOGFILE
-	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-	Start-Sleep -s 3
+	Try { $SCANRESPONSE = Invoke-RestMethod -Method 'POST' -Uri 'https://urlscan.io/api/v1/scan/' -Headers $HEADERS -Body $BODY } Catch { $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream()) }
+	if ( [string]::IsNullOrEmpty($SCANRESPONSE) ) {
+		$reader.BaseStream.Position = 0
+		$reader.DiscardBufferedData()
+		$Exception = $reader.ReadToEnd() | ConvertFrom-Json
+	}
+	if ( -not ([string]::IsNullOrEmpty($Exception)) ) {
+		Write-Output "Exception Error:" $Exception.description >> $LOGFILE
+		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+	}else{ 	
+		$RESPONSEAPI = $SCANRESPONSE.api
+		Do {
+			Start-Sleep -s 30
+			$RESPONSE = try { $SCANRESULT = Invoke-RestMethod -Method 'GET' -Uri $RESPONSEAPI } catch { $_.Exception.Response.StatusCode.Value__}
+		}Until($RESPONSE -ne 404)
+		$ReportURL = $SCANRESULT.task.reportURL
+		$ScreenShot = $SCANRESULT.task.screenshotURL
+
+		Write-OutPut "ScanReportURL:     ",$($ReportURL) >> $LOGFILE
+		Write-OutPut "ScreenShotURL:     ",$($ScreenShot) >> $LOGFILE
+		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+		Start-Sleep -s 3
+	}
 }
 
 function Submit-URL-Virustotal {
@@ -321,7 +334,9 @@ function FromEmailAttachment {
 	$URLARRAY = @()
 	foreach ($URL in $URLLIST){ if ( $URL -notin $EXPLIST ){$URLARRAY = $URLARRAY += $URL }}
 	if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
-		foreach($URL in $URLARRAY){ 
+		foreach($URL in $URLARRAY){
+			Write-OutPut "URL:     ",$URL >> $LOGFILE
+			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 			CheckRedirectedURL
 		}
 	}
@@ -432,6 +447,7 @@ function ExtractURLFromPDFHTML {
 		$FilePath = Split-Path -path $ATTFILENAME
 		$HTMLFILE = $FilePath+"\"+$BaseName+".html"
 		$extractor.SaveHtmlToFile($HTMLFILE)
+		$extractor.Reset()
 	}else{
 		$HTMLFILE = $ATTFILENAME
 	}
@@ -443,52 +459,54 @@ function ExtractURLFromPDFHTML {
 	foreach ($URL in $URLLIST){ if ( $URL -notin $EXPLIST ){$URLARRAY = $URLARRAY += $URL }}
 	# URL is not null or empty do check the URL
 	if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
-		foreach($URL in $URLARRAY){ 
+		foreach($URL in $URLARRAY){
+			Write-OutPut "URL:     ",$URL >> $LOGFILE
+			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 			CheckRedirectedURL
-		}
+			}
 	}else{ Write-OutPut "=====================No URL in the PDF/HTML file needs to scan=====================" >> $LOGFILE }
-	$extractor.Reset()
 }
 
 function CheckRedirectedURL {
-	$webRequest = [System.Net.WebRequest]::Create($URL)
-	$webRequest.AllowAutoRedirect=$false
-	Try {
-		$webResponse = $webRequest.GetResponse()
-	}
-	Catch [System.Net.WebException] {
-		$ExceptionError = $_.Exception.Message
-	}	
-	
+	Try { $webRequest = [System.Net.WebRequest]::Create($URL) } Catch { $ExceptionError = $_.Exception.Message }
 	if ( [string]::IsNullOrEmpty($ExceptionError) ) {
-		if ( ($webResponse.StatusCode -eq "Found") -or ($webResponse.StatusCode -eq "Redirect") ) {
-			Write-Output "The Original URL is:" $URL >> $LOGFILE
-			$URL = $webResponse.GetResponseHeader("Location")	
-			Write-OutPut "    |" >> $LOGFILE
-			Write-Output "    |--> The Redirected URL is:" $URL >> $LOGFILE
-			Submit-URL-Virustotal
-			Submit-URLSCAN
-			Submit-CHECKPHISH
-			Google-Safe-Browsing
-		}else{
-			if ( $webResponse.ResponseUri.OriginalString -eq $webResponse.ResponseUri.AbsoluteUri )  {
-				Write-Output "No Redirection, Will scan the Original URL" >> $LOGFILE
+		if ( [string]::IsNullOrEmpty($([URI]$URL).Scheme) ) { $URL = "http://"+$URL }
+		$webRequest.AllowAutoRedirect=$false
+		Try { $webResponse = $webRequest.GetResponse() } Catch { $ExceptionError = $_.Exception.Message }	
+		
+		if ( [string]::IsNullOrEmpty($ExceptionError) ) {
+			if ( ($webResponse.StatusCode -eq "Found") -or ($webResponse.StatusCode -eq "Redirect") ) {
+				Write-Output "The Original URL is:" $URL >> $LOGFILE
+				$URL = $webResponse.GetResponseHeader("Location")	
+				Write-OutPut "    |" >> $LOGFILE
+				Write-Output "    |--> The Redirected URL is:" $URL >> $LOGFILE
 				Submit-URL-Virustotal
 				Submit-URLSCAN
 				Submit-CHECKPHISH
 				Google-Safe-Browsing
+			}else{
+				if ( $webResponse.ResponseUri.OriginalString -eq $webResponse.ResponseUri.AbsoluteUri )  {
+					Write-Output "No Redirection, Will scan the Original URL" >> $LOGFILE
+					Submit-URL-Virustotal
+					Submit-URLSCAN
+					Submit-CHECKPHISH
+					Google-Safe-Browsing
+				}
 			}
+		}else{
+			Write-Output "Exception Error:" $ExceptionError >> $LOGFILE
+			Write-Output "Will scan the Original URL" >> $LOGFILE
+			Submit-URL-Virustotal
+			Submit-URLSCAN
+			Submit-CHECKPHISH
+			Google-Safe-Browsing	
 		}
-	}else{
-		Write-Output "Exception Error:" $ExceptionError >> $LOGFILE
-		Write-Output "Will scan the Original URL" >> $LOGFILE
-		Submit-URL-Virustotal
-		Submit-URLSCAN
-		Submit-CHECKPHISH
-		Google-Safe-Browsing	
-	}
 		Get-Job | Wait-Job
-	$webResponse.Close()
+		$webResponse.Close()
+	}else { 
+		Write-Output "Exception Error:" $ExceptionError >> $LOGFILE
+		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+		}
 }
 
 function MAIN {
@@ -530,7 +548,6 @@ function MAIN {
 					# URL is not null or empty do check the URL
 					if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
 						foreach($URL in $URLARRAY){
-							if ( [string]::IsNullOrEmpty($([URI]$URL).Scheme) ) { $URL = "http://"+$URL }
 							Write-OutPut "URL:     ",$URL >> $LOGFILE
 							Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 							CheckRedirectedURL
