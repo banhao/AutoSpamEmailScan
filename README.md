@@ -1,3 +1,8 @@
+# Auto Spam Email Scan
+[![Minimum Supported PowerShell Version](https://img.shields.io/badge/PowerShell-5.1+-purple.svg)](https://github.com/PowerShell/PowerShell) ![Cross Platform](https://img.shields.io/badge/platform-windows-lightgrey)
+[![PowerShell Gallery Version](https://img.shields.io/powershellgallery/v/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan) [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan)
+
+
 Notice: "Cisco Email Reporting Plug-in" or "NotifySecurity" Plug-in are not necessary. It's just optional for the end users to have the one-click ability. Without these plug-in the end users still can forward the spam emails to a specific mail box for the investigation.
 
 But I still recommend to use "Cisco Email Reporting Plug-in" because after custom the buttons you can do lots of things.
