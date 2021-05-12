@@ -11,7 +11,7 @@ Imagine the following scenario: You have an email security poolicy in your compa
 
 So you can involve this "Cisco Email Reporting Plug-in" and make it automatically. You can custom one button and display as "Release this email", when the end users click this button on the notification email, it will be encapsulated as a raw-data and forward to "releaseemail@yourconpany.com". You can run a script to monitor "releaseemail@yourconpany.com" and grab the information from the email and call the ESA API to release the emails from the quarantine.
 
-“AutoSpamEmailScan.ps1” is using the same manner to call the ESA API to build a blocklist for the enduses.
+“AutoSpamEmailScan.ps1” is using the same manner to call the ESA API to build a blocklist for the endusers.
 
 <img src="/procedure.jpg">
 
