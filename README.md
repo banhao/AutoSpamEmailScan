@@ -1,4 +1,9 @@
-Notice: "Cisco Email Reporting Plug-in" or "NotifySecurity" Plug-in are not necessary. It's just optional for the end users to have the one-click ability. Without these plug-ins the end users still can forwatd the spam emails to a specific mail box for the investigation.
+# Auto Spam Email Scan
+[![Minimum Supported PowerShell Version](https://img.shields.io/badge/PowerShell-5.1+-purple.svg)](https://github.com/PowerShell/PowerShell) ![Cross Platform](https://img.shields.io/badge/platform-windows-lightgrey)
+[![PowerShell Gallery Version](https://img.shields.io/powershellgallery/v/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan) [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan)
+
+
+Notice: "Cisco Email Reporting Plug-in" or "NotifySecurity" Plug-in are not necessary. It's just optional for the end users to have the one-click ability. Without these plug-in the end users still can forward the spam emails to a specific mail box for the investigation.
 
 But I still recommend to use "Cisco Email Reporting Plug-in" because after custom the buttons you can do lots of things.
 
@@ -6,7 +11,7 @@ Imagine the following scenario: You have an email security poolicy in your compa
 
 So you can involve this "Cisco Email Reporting Plug-in" and make it automatically. You can custom one button and display as "Release this email", when the end users click this button on the notification email, it will be encapsulated as a raw-data and forward to "releaseemail@yourconpany.com". You can run a script to monitor "releaseemail@yourconpany.com" and grab the information from the email and call the ESA API to release the emails from the quarantine.
 
-“AutoSpamEmailScan.ps1” is using the same manner to call the ESA API to build a blocklist for the enduses.
+“AutoSpamEmailScan.ps1” is using the same manner to call the ESA API to build a blocklist for the endusers.
 
 <img src="/procedure.jpg">
 
@@ -98,7 +103,7 @@ If you have Cisco Email Security Appliance in your environment above version 13.
 By working with the "Cisco Email Reporting Plug-in" for Outlook, you can let the end users to block spam emails by one click.
 
 # AutoSpamEmailScan
-“AutoSpamEmailScan.ps1” is used to monitor a specific mailbox that in enterprise users can forward suspicious spam emails to a specific mailbox. 
+“AutoSpamEmailScan.ps1” is used to monitor a specific mailbox that enterprise users can forward suspicious spam emails to a specific mailbox. 
 This PowerShell script can monitor the mailbox for any unread emails, grab the URLs and attachments from the emails and submit to virustotal.com, urlscan.io, Google safe browsing and OPSWAT. Script also can extract URLs from a pdf file. 
 After the scan finished, script can generate HTML format scan report and auto reply to the senders.
 Script can be run once or loop interval, if $INTERVAL in the init.conf is 0 means script will only run one time else the number is the loop interval seconds.
