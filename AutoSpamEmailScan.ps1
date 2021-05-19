@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.4.2
+.VERSION 4.5.0
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,14 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	
+	Creation Date:  <05/19/2021>
+	Purpose/Change: Add "BlockedMailSelfRelease" function. If you donnot have ESA/SMA or donott want to use ESA/SMA API to block SPAM sender or release blocked emails from quarantine then please setup "ENABLEESASPAMBL" and "ENABLESELFRELEASE" as "False" in init.conf  
+	
+	Creation Date:  <05/13/2021>
+	Purpose/Change: Add "slblconfig EXPORT" after update the Cisco Email Security Appliance Spam Quarantine Blacklist.(related to Cisco Bug CSCvx12488)
+	ssh PRIVATE KEY must be save in "c:\users\<username>\.ssh\" folder. ".ssh" folder must disable "inheritance" and manually grant "local\SYSTEM" group, "local\Administrators" group "full control" privilege, and current user "read only" privilege.
+
 	Creation Date:  <04/05/2021>
 	Purpose/Change: Optimize function CheckRedirectedURL{}
 
@@ -38,10 +46,10 @@
 	Creation Date:  <11/10/2020>
 	Purpose/Change: Move emails to sub-folder when after the checking.
 
-	Creation Date:  <04/3/2020>
+	Creation Date:  <04/03/2020>
 	Purpose/Change: Optimize the parameters setting.
 
-	Creation Date:  <04/2/2020>
+	Creation Date:  <04/02/2020>
 	Purpose/Change: Add new feature to let the use input the credential just chose "N" when prompt "salt is empty". Add SystemException, fix the broken of the system error.
 
 	Creation Date:  <03/10/2020>
@@ -158,7 +166,13 @@ $INTERVAL = [int]$(Get-Content .\init.conf | findstr INTERVAL | %{ $_.Split('=')
 $ENABLEESASPAMBL  = $(Get-Content .\init.conf | findstr ENABLEESASPAMBL | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }).ToLower()
 $ESAURL1 = Get-Content .\init.conf | findstr ESAURL1 | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $ESAURL2 = Get-Content .\init.conf | findstr ESAURL2 | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-
+$PRIVATEKEY = Get-Content .\init.conf | findstr PRIVATEKEY | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$HOST1 = $([System.Uri]$ESAURL1).Host
+$HOST2 = $([System.Uri]$ESAURL2).Host
+$ENABLESELFRELEASE = $(Get-Content .\init.conf | findstr ENABLESELFRELEASE | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }).ToLower()
+$SMAURL = Get-Content .\init.conf | findstr SMAURL | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$QUARANTINENAME = Get-Content .\init.conf | findstr QUARANTINENAME | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$SMA = $([System.Uri]$SMAURL).Host
 
 $VIRUSTOTAL_API_KEY = Get-Content .\init.conf | findstr VIRUSTOTAL_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $URLSCAN_API_KEY = Get-Content .\init.conf | findstr URLSCAN_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
@@ -166,8 +180,8 @@ $GOOGLE_API_KEY = Get-Content .\init.conf | findstr GOOGLE_API_KEY |  %{ $_.Spli
 $OPSWAT_API_KEY = Get-Content .\init.conf | findstr OPSWAT_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $CHECKPHISH_API_KEY = Get-Content .\init.conf | findstr CHECKPHISH_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 
-if ( $ENABLEESASPAMBL -eq "true"){
-	$ESAUSERNAME = Read-Host "Please input the ESA Username"
+if ( $ENABLEESASPAMBL -eq "true" -or $ENABLESELFRELEASE -eq "true" ){
+	$ESAUSERNAME = Read-Host "Please input the ESA/SMA Username"
 	$ESAPASSWORD = Read-Host -assecurestring "Please input the Password"
 	$ESACREDENTIAL = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($ESAUSERNAME+":"+$([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($ESAPASSWORD)))))
 }
@@ -322,9 +336,19 @@ function FromEmailAttachment {
 	Write-OutPut "===DateTimeReceived:    ",$($CdoMessage.SentOn) >> $LOGFILE
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	if ( $ENABLEESASPAMBL -eq "true"){
-		if ( ($EMAIL.ToRecipients.Address -eq "virus@dc-s-esav-112.ehealthsask.ca") -or ($EMAIL.ToRecipients.Address -eq "phish@dc-s-esav-112.ehealthsask.ca") -or ($EMAIL.ToRecipients.Address -eq "spam@dc-s-esav-112.ehealthsask.ca") -or ($EMAIL.ToRecipients.Address -eq "marketing@dc-s-esav-112.ehealthsask.ca") ){
+		if ( ($EMAIL.ToRecipients.Address -eq "blockforme@esa.company.com") -or ($EMAIL.ToRecipients.Address -eq "blockforall@esa.company.com")  ){
 			ESASpamQuarantine
 		}
+	}
+	if ( $ENABLESELFRELEASE -eq "true"){
+		if ( ($EMAIL.ToRecipients.Address -eq "release@esa.company.com") ){
+			BlockedMailSelfRelease
+		}
+	}
+	if ( ($EMAIL.ToRecipients.Address -eq "investigation@esa.company.com") ){
+		$INVESTIGATION = "true"
+	}else{
+		$INVESTIGATION = "false"
 	}
 	$TextBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:textdescription").Value
 	$HTMLBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:htmldescription").Value
@@ -381,12 +405,12 @@ function FromEmailAttachment {
 function ESASpamQuarantine {
 	$regex = [regex]"\<(.*)\>"
 	$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
-	if ( ($EMAIL.ToRecipients.Address -eq "virus@dc-s-esav-112.ehealthsask.ca") -or ($EMAIL.ToRecipients.Address -eq "phish@dc-s-esav-112.ehealthsask.ca") ){
+	if ( ($EMAIL.ToRecipients.Address -eq "blockforall@esa.company.com") ){
 		$Blocklist_recipient = $('.*@'+$regex.match($($CdoMessage.To)).Groups[1].value.split("@")[1]).ToLower()
 		$Blocklist_recipient_domain = $('.*@'+$regex.match($($CdoMessage.To)).Groups[1].value.split("@")[1]).ToLower()
 
 	}else{
-		if ( ($EMAIL.ToRecipients.Address -eq "spam@dc-s-esav-112.ehealthsask.ca") -or ($EMAIL.ToRecipients.Address -eq "marketing@dc-s-esav-112.ehealthsask.ca") ){
+		if ( ($EMAIL.ToRecipients.Address -eq "blockforme@esa.company.com") ){
 			$Blocklist_recipient = $($regex.match($($CdoMessage.To)).Groups[1].value).ToLower()
 			$Blocklist_recipient_domain = $('.*@'+$regex.match($($CdoMessage.To)).Groups[1].value.split("@")[1]).ToLower()
 		}
@@ -397,9 +421,11 @@ function ESASpamQuarantine {
 	$SenderList = $(Invoke-RestMethod -Method 'GET' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist?action=view&quarantineType=spam&viewBy=recipient&search=$Blocklist_recipient" -Headers $HEADERS).data.senderList
 	$SenderList_domain = $(Invoke-RestMethod -Method 'GET' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist?action=view&quarantineType=spam&viewBy=recipient&search=$Blocklist_recipient_domain" -Headers $HEADERS).data.senderList
 	if ( ([string]::IsNullOrEmpty($SenderList)) -and ([string]::IsNullOrEmpty($SenderList_domain)) ){
-		$BODY = "{ `n`"action`": `"add`", `n`"quarantineType`": `"spam`", `n`"viewBy`": `"recipient`", `n`"senderList`":  [`"$Blocklist_Sender`"], `n`"recipientAddresses`": [`"$Blocklist_recipient`"] }"
+		$BODY = "{ `n`"action`": `"add`", `n`"quarantineType`": `"spam`", `n`"viewBy`": `"recipient`", `n`"senderList`":  [`"$Blocklist_Sender`"], `n`"recipientAddresses`": [`"$Blocklist_recipient`"] `n}"
 		$Response_1 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
+		ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$HOST1 "slblconfig EXPORT"
 		$Response_2 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL2/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
+		ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$HOST2 "slblconfig EXPORT"
 		Write-OutPut "********************************************************************" >> $LOGFILE
 		Write-Output $Response_1 | ConvertTo-Json >> $LOGFILE
 		Write-Output $Response_2 | ConvertTo-Json >> $LOGFILE
@@ -414,11 +440,42 @@ function ESASpamQuarantine {
 			$Response_1 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
 			$Response_2 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL2/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
 			Write-OutPut "********************************************************************" >> $LOGFILE
+			Write-OutPut "*************************Block the Sender***************************" >> $LOGFILE
+			Write-OutPut "********************************************************************" >> $LOGFILE
 			Write-Output $Response_1 | ConvertTo-Json >> $LOGFILE
 			Write-Output $Response_2 | ConvertTo-Json >> $LOGFILE   
 			Write-OutPut "********************************************************************" >> $LOGFILE
 		}
 	}
+}
+
+
+function BlockedMailSelfRelease {
+	$regex = [regex]"Message ID\:.*"
+	$Message_ID_ESA = $($regex.match($($CdoMessage.TextBody)).value) | %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
+	$SMA_MAIL_LOGS = ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$SMA "grep $Message_ID_ESA mail_logs" | findstr "MID"
+	$regex_MID = [regex]"MID .* \("
+	$Message_ID = $regex_MID.match($SMA_MAIL_LOGS).Value.split(" ")[1]
+	$HEADERS = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+	$HEADERS.Add("Authorization", "Basic $ESACREDENTIAL")
+	$HEADERS.Add("Content-Type", "text/plain")
+	$BODY = "{ `n`"action`": `"release`", `n`"mids`": [$Message_ID], `n`"quarantineName`": `"$QUARANTINENAME`", `n`"quarantineType`": `"pvo`" `n}"
+	$Response = Invoke-RestMethod -Method 'POST' -Uri "$SMAURL/sma/api/v2.0/quarantine/messages" -Headers $HEADERS -Body $BODY
+	$SMTPSERVER = Get-Content .\init.conf | findstr SMTPSERVER |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+	$REPLYTO = $($EMAIL.From.Address.ToString())
+	$EMAIBODY = 'Message Information:' + "`r`n" + 'Email From: ' + $($CdoMessage.From) + "`r`n" + 'Subject: ' + $($CdoMessage.Subject) + "`r`n" + 'Date: ' + $($CdoMessage.SentOn) + "`r`n" + 'Message ID: ' + $Message_ID_ESA
+	if ( $Response.data.totalCount -eq 0 ){
+		$REPLYSUBJECT = "AUTO-REPLY/Blocked Email not found OR released already--- "+$Message_ID_ESA
+	}
+	if ( $Response.data.totalCount -eq 1 ){
+		$REPLYSUBJECT = "AUTO-REPLY/Blocked Email released successfully--- "+$Message_ID_ESA
+	}
+	Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Subject $REPLYSUBJECT -Body $EMAIBODY
+	Write-OutPut "********************************************************************" >> $LOGFILE
+	Write-OutPut "*****************Release Email From Quarantine**********************" >> $LOGFILE
+	Write-OutPut "********************************************************************" >> $LOGFILE
+	Write-Output $Response | ConvertTo-Json >> $LOGFILE
+	Write-OutPut "********************************************************************" >> $LOGFILE
 }
 
 
@@ -523,6 +580,22 @@ function MAIN {
 	$PROPERTYSET = new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties)
 	$PROPERTYSET.RequestedBodyType = [Microsoft.Exchange.WebServices.Data.BodyType]::Text
 	[System.Net.ServicePointManager]::SecurityProtocol = @("Tls12","Tls11","Tls","Ssl3")
+#	Use .Net Object to ignore self-signed certificate
+	if ("TrustAllCertsPolicy" -as [type]) {}
+	else {
+	Add-Type @"
+	using System.Net;
+	using System.Security.Cryptography.X509Certificates;
+	public class TrustAllCertsPolicy : ICertificatePolicy {
+		public bool CheckValidationResult(
+			ServicePoint srvPoint, X509Certificate certificate,
+			WebRequest request, int certificateProblem) {
+			return true;
+		}
+	}
+"@
+	[System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
+	}
 	if ( $INBOX.TotalCount -ne 0 ){
 		$ITEMS = $INBOX.FindItems($INBOX.TotalCount)
 		foreach ( $EMAIL in $ITEMS.Items ){
@@ -614,8 +687,11 @@ function MAIN {
 					ConvertLogToHTML
 					$REPLYSUBJECT = "AUTO-REPLY/Security Scan Report-- "+$($EMAIL.Subject)
 					$SMTPSERVER = Get-Content .\init.conf | findstr SMTPSERVER |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-					#$REPLYTO = $($EMAIL.From.Address.ToString()) // If you want to send the scan report to the sender who reported the spam email //
-					$REPLYTO = Get-Content .\init.conf | findstr REPLYTO |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+					if ( $INVESTIGATION -eq "true" ) {
+						$REPLYTO = $($EMAIL.From.Address.ToString())
+					}else{
+						$REPLYTO = Get-Content .\init.conf | findstr REPLYTO |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+					}
 					$REPLYCC = Get-Content .\init.conf | findstr REPLYCC |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 					$EMAIBODY = '%CUSTOMER_EMAIL=' + $($EMAIL.From.Address) + "`r`n" + '%CUSTOMER=' + $($EMAIL.From.Name) + "`r`n" + '%SUMMARY=Security Scan Report--' + $($EMAIL.Subject)
 					Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Cc $REPLYCC -Subject $REPLYSUBJECT -Body $EMAIBODY -Attachments $HTMLREPFILE
