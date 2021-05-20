@@ -92,16 +92,6 @@ And also can custom the action when end users click the different buttons.
 </reporting>
 ```
 
-Version:4.4.1
-
-Update function CheckRedirectedURL{}
-
-Version:4.4.0
-
-If you have Cisco Email Security Appliance in your environment above version 13.5.2 there's a new feature called "Spam Quarantine SafeList and BlockList".
-
-By working with the "Cisco Email Reporting Plug-in" for Outlook, you can let the end users to block spam emails by one click.
-
 # AutoSpamEmailScan
 “AutoSpamEmailScan.ps1” is used to monitor a specific mailbox that enterprise users can forward suspicious spam emails to a specific mailbox. 
 This PowerShell script can monitor the mailbox for any unread emails, grab the URLs and attachments from the emails and submit to virustotal.com, urlscan.io, Google safe browsing and OPSWAT. Script also can extract URLs from a pdf file. 
