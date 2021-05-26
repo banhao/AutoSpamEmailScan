@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.5.0
+.VERSION 4.5.1
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -27,9 +27,12 @@
 
 .RELEASENOTES
 	
+	Creation Date:  <05/26/2021>
+	Purpose/Change: Fixed some bugs
+
 	Creation Date:  <05/19/2021>
 	Purpose/Change: Add "BlockedMailSelfRelease" function. If you donnot have ESA/SMA or donott want to use ESA/SMA API to block SPAM sender or release blocked emails from quarantine then please setup "ENABLEESASPAMBL" and "ENABLESELFRELEASE" as "False" in init.conf  
-	
+
 	Creation Date:  <05/13/2021>
 	Purpose/Change: Add "slblconfig EXPORT" after update the Cisco Email Security Appliance Spam Quarantine Blacklist.(related to Cisco Bug CSCvx12488)
 	ssh PRIVATE KEY must be save in "c:\users\<username>\.ssh\" folder. ".ssh" folder must disable "inheritance" and manually grant "local\SYSTEM" group, "local\Administrators" group "full control" privilege, and current user "read only" privilege.
@@ -346,13 +349,13 @@ function FromEmailAttachment {
 		}
 	}
 	if ( ($EMAIL.ToRecipients.Address -eq "investigation@esa.company.com") ){
-		$INVESTIGATION = "true"
+		$INVESTIGATION = $true
 	}else{
-		$INVESTIGATION = "false"
+		$INVESTIGATION = $false
 	}
 	$TextBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:textdescription").Value
 	$HTMLBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:htmldescription").Value
-	$EmailBODY = $TextBody + $HTMLBody
+	$EmailBODY = $TextBody + $HTMLBody + $EMLData
 	$URLLIST = $EmailBODY | select-string -pattern $URLRegEx -AllMatches  | %{ $_.Matches } | %{ $_.Value } | Sort-Object | ? {$EXEMPTURL -notcontains $_} | Get-Unique
 	$EXPLIST = $EXEMPTURL | foreach-object { $URLLIST -match $_ }
 	$URLARRAY = @()
@@ -687,8 +690,8 @@ function MAIN {
 					ConvertLogToHTML
 					$REPLYSUBJECT = "AUTO-REPLY/Security Scan Report-- "+$($EMAIL.Subject)
 					$SMTPSERVER = Get-Content .\init.conf | findstr SMTPSERVER |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-					if ( $INVESTIGATION -eq "true" ) {
-						$REPLYTO = $($EMAIL.From.Address.ToString())
+					if ($INVESTIGATION) {
+						$REPLYTO = $EMAIL.From.Address.ToString()
 					}else{
 						$REPLYTO = Get-Content .\init.conf | findstr REPLYTO |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 					}
