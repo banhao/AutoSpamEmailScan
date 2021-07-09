@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.5.1
+.VERSION 4.6.0
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	
+	Creation Date:  <07/08/2021>
+	Purpose/Change: add Cisco SecureX Investigation Module
 	
 	Creation Date:  <05/26/2021>
 	Purpose/Change: Fixed some bugs
@@ -182,6 +185,9 @@ $URLSCAN_API_KEY = Get-Content .\init.conf | findstr URLSCAN_API_KEY |  %{ $_.Sp
 $GOOGLE_API_KEY = Get-Content .\init.conf | findstr GOOGLE_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $OPSWAT_API_KEY = Get-Content .\init.conf | findstr OPSWAT_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $CHECKPHISH_API_KEY = Get-Content .\init.conf | findstr CHECKPHISH_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$SECUREX_CLIENT_ID = Get-Content .\init.conf | findstr SECUREX_CLIENT_ID |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$SECUREX_CLIENT_PASSWORD = Get-Content .\init.conf | findstr SECUREX_CLIENT_PASSWORD |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+
 
 if ( $ENABLEESASPAMBL -eq "true" -or $ENABLESELFRELEASE -eq "true" ){
 	$ESAUSERNAME = Read-Host "Please input the ESA/SMA Username"
@@ -349,9 +355,9 @@ function FromEmailAttachment {
 		}
 	}
 	if ( ($EMAIL.ToRecipients.Address -eq "investigation@esa.company.com") ){
-		$INVESTIGATION = $true
+		$global:INVESTIGATION = $true
 	}else{
-		$INVESTIGATION = $false
+		$global:INVESTIGATION = $false
 	}
 	$TextBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:textdescription").Value
 	$HTMLBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:htmldescription").Value
@@ -544,6 +550,7 @@ function CheckRedirectedURL {
 				Submit-URLSCAN
 				Submit-CHECKPHISH
 				Google-Safe-Browsing
+				SecureX-Investigation
 			}else{
 				if ( $webResponse.ResponseUri.OriginalString -eq $webResponse.ResponseUri.AbsoluteUri )  {
 					Write-Output "No Redirection, Will scan the Original URL" >> $LOGFILE
@@ -551,6 +558,7 @@ function CheckRedirectedURL {
 					Submit-URLSCAN
 					Submit-CHECKPHISH
 					Google-Safe-Browsing
+					SecureX-Investigation
 				}
 			}
 		}else{
@@ -559,7 +567,8 @@ function CheckRedirectedURL {
 			Submit-URL-Virustotal
 			Submit-URLSCAN
 			Submit-CHECKPHISH
-			Google-Safe-Browsing	
+			Google-Safe-Browsing
+			SecureX-Investigation
 		}
 		Get-Job | Wait-Job
 		$webResponse.Close()
@@ -568,6 +577,94 @@ function CheckRedirectedURL {
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 		}
 }
+
+
+function Threat_Response_authentication {
+	$oAuthUri = "https://visibility.amp.cisco.com/iroh/oauth2/token"
+
+	$headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+	$headers.Add("Authorization", "Basic $([System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($SECUREX_CLIENT_ID + ":" + $SECUREX_CLIENT_PASSWORD)))")
+	$headers.Add("Content-Type", "application/x-www-form-urlencoded")
+	$headers.Add("Accept", "application/json")
+
+	$authBody = @{
+		grant_type = 'client_credentials'
+	}
+
+	$authResponse = Invoke-RestMethod -Method Post -Uri $oAuthUri -Headers $headers -Body $authBody -ErrorAction Stop
+	$global:Threat_Response_token = $authResponse.access_token
+	$global:Threat_Response_tokenexpire = $authResponse.expires_in
+	return $Threat_Response_token, $Threat_Response_tokenexpire
+}
+
+function SecureX-Investigation {
+	Threat_Response_authentication
+	Write-OutPut "SecureX Investigation Report: " >> $LOGFILE
+	$headers = @{
+		'Content-Type' = 'application/json'
+		Accept = 'application/json'
+		Authorization = "Bearer $Threat_Response_token"
+	}
+	$body = ConvertTo-Json -InputObject @{ 'content' = $URL }
+	$inspect_response = Invoke-WebRequest -Method Post -Uri "https://visibility.amp.cisco.com/iroh/iroh-inspect/inspect" -Headers $headers -Body $body -ErrorAction Stop
+	
+	$headers = @{
+		'Content-Type' = 'application/json'
+		Accept = 'application/json'
+		Authorization = "Bearer $Threat_Response_token"
+	}
+	$body = $inspect_response.Content
+	$response = Invoke-WebRequest -Method Post -Uri "https://visibility.amp.cisco.com/iroh/iroh-enrich/observe/observables" -Headers $headers -Body $body -ErrorAction Stop
+	$results = $response.Content | ConvertFrom-Json
+	for($i=0;$i -le $results.data.length;$i++){
+		$module = $results.data[$i].module
+		if ( $module -eq  "Talos Intelligence" ) {
+			Write-OutPut "Talos Intelligence Investigation Results: " >> $LOGFILE
+			foreach ( $talos_results in $results.data[$i].data.verdicts.docs ){
+				$ta_result = $talos_results.observable.value+" , "+$talos_results.disposition_name
+				Write-OutPut $ta_result >> $LOGFILE
+			}
+			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+		}
+		if ( $module -eq  "Umbrella" ) {
+			$title = "Umbrella Investigation Results, " + $($results.data[$i].data.sightings.docs[0].description -split 'by', 0)[0] + "by:"
+			Write-OutPut $title >> $LOGFILE
+			foreach ($umbrella_results in $results.data[$i].data.sightings.docs){
+				$endpoint = $($umbrella_results.description -split 'by', 0)[1]
+				Write-OutPut $endpoint >> $LOGFILE
+			}
+			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+		}
+		if ( $module -eq  "SMA Email" ) {
+			Write-OutPut "SMA Email Investigation Results, Following e-mail address were related to the URLs/Domains:" >> $LOGFILE
+			$Outgoing_list = @()
+			$Incoming_list = @()
+			for($j=0;$j -le $results.data[$i].data.sightings.docs.length;$j++){
+				if ($results.data[$i].data.sightings.docs[$j].description -match "Outgoing"){
+					$email_mid = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "cisco_mid"})){$key.value}
+					$email_subject = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "email_subject"})){$key.value}
+					$email_address = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "email"})){$key.value}
+					$outgoing_array = $($email_address | Get-Unique), $($($email_mid -split '-')[0] | Get-Unique), $($email_subject | Get-Unique)
+					$Outgoing_list += ,$outgoing_array
+				}
+				if ($results.data[$i].data.sightings.docs[$j].description -match "Incoming"){
+					$email_mid = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "cisco_mid"})){$key.value}
+					$email_subject = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "email_subject"})){$key.value}
+					$email_address = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "email"})){$key.value}
+					$incoming_array = $($email_address | Get-Unique), $($($email_mid -split '-')[0] | Get-Unique), $($email_subject | Get-Unique)
+					$Incoming_list += ,$incoming_array
+				}
+			}
+			Write-OutPut "Incoming Email List:" >> $LOGFILE
+			Write-OutPut $Incoming_list | % { $_ -join ','} >> $LOGFILE
+			Write-OutPut "--------------------------------------------------------------------" >> $LOGFILE
+			Write-OutPut "Outgoing Email List:" >> $LOGFILE
+			Write-OutPut $Outgoing_list | % { $_ -join ','} >> $LOGFILE
+			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+		}
+	}
+}
+
 
 function MAIN {
 	date
