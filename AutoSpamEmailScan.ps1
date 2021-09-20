@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.6.0
+.VERSION 4.6.2
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	
+	Creation Date:  <09/20/2021>
+	Purpose/Change: Fixed Function "ESASpamQuarantine" a small bug.
 	
 	Creation Date:  <07/08/2021>
 	Purpose/Change: add Cisco SecureX Investigation Module
@@ -447,7 +450,9 @@ function ESASpamQuarantine {
 		}else{
 			$BODY = "{ `n`"action`": `"append`", `n`"quarantineType`": `"spam`", `n`"viewBy`": `"sender`", `n`"senderAddresses`":  [`"$Blocklist_Sender`"], `n`"recipientList`": [`"$Blocklist_recipient`"] }"
 			$Response_1 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
+			ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$HOST1 "slblconfig EXPORT"
 			$Response_2 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL2/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
+			ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$HOST2 "slblconfig EXPORT"
 			Write-OutPut "********************************************************************" >> $LOGFILE
 			Write-OutPut "*************************Block the Sender***************************" >> $LOGFILE
 			Write-OutPut "********************************************************************" >> $LOGFILE
