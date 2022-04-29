@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 4.6.2
+.VERSION 5.0.0
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,12 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	
+	Creation Date:  <04/28/2022>
+	Purpose/Change: Instead the "Cisco SecureX Investigation Module" with the "secureX.ps1"
+					Add "MineMeld_Indicator.ps1"
+					Add ESA_Spam_Block.ps1
+					Remove "checkphish.ai" module
 	
 	Creation Date:  <09/20/2021>
 	Purpose/Change: Fixed Function "ESASpamQuarantine" a small bug.
@@ -160,10 +166,9 @@ if ( [string]::IsNullOrEmpty($CREDENTIAL) -and [string]::IsNullOrEmpty($SALT) ){
 		}else{ $PASSWORD = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD)) }
 	}else { $PASSWORD = ([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD))).Replace($SALT,"") }
 }
-	
+
 $DOMAIN = Get-Content .\init.conf | findstr DOMAIN |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EMAILADDRESS = Get-Content .\init.conf | findstr EMAILADDRESS |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$EXCHANGESRV = Get-Content .\init.conf | findstr EXCHANGESRV |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EWSDLLPATH = Get-Content .\init.conf | findstr EWSDLLPATH |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $PDF2HTMLDLLPATH = Get-Content .\init.conf | findstr PDF2HTMLDLLPATH |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $DOWNLOADDIRECTORY =  Get-Content .\init.conf | findstr DOWNLOADDIRECTORY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
@@ -172,55 +177,16 @@ $EXTENSIONARRAY = Get-Content .\init.conf | findstr EXTENSIONARRAY |  %{ $_.Spli
 $EXEMPTURL = (Get-Content .\init.conf | findstr EXEMPTURL |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }).split(",")
 $SUBFOLDER = Get-Content .\init.conf | findstr SUBFOLDER | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $INTERVAL = [int]$(Get-Content .\init.conf | findstr INTERVAL | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() })
-$ENABLEESASPAMBL  = $(Get-Content .\init.conf | findstr ENABLEESASPAMBL | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }).ToLower()
-$ESAURL1 = Get-Content .\init.conf | findstr ESAURL1 | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$ESAURL2 = Get-Content .\init.conf | findstr ESAURL2 | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$PRIVATEKEY = Get-Content .\init.conf | findstr PRIVATEKEY | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$HOST1 = $([System.Uri]$ESAURL1).Host
-$HOST2 = $([System.Uri]$ESAURL2).Host
-$ENABLESELFRELEASE = $(Get-Content .\init.conf | findstr ENABLESELFRELEASE | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }).ToLower()
-$SMAURL = Get-Content .\init.conf | findstr SMAURL | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$QUARANTINENAME = Get-Content .\init.conf | findstr QUARANTINENAME | %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$SMA = $([System.Uri]$SMAURL).Host
-
 $VIRUSTOTAL_API_KEY = Get-Content .\init.conf | findstr VIRUSTOTAL_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $URLSCAN_API_KEY = Get-Content .\init.conf | findstr URLSCAN_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $GOOGLE_API_KEY = Get-Content .\init.conf | findstr GOOGLE_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $OPSWAT_API_KEY = Get-Content .\init.conf | findstr OPSWAT_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $CHECKPHISH_API_KEY = Get-Content .\init.conf | findstr CHECKPHISH_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$SECUREX_CLIENT_ID = Get-Content .\init.conf | findstr SECUREX_CLIENT_ID |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$SECUREX_CLIENT_PASSWORD = Get-Content .\init.conf | findstr SECUREX_CLIENT_PASSWORD |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-
-
-if ( $ENABLEESASPAMBL -eq "true" -or $ENABLESELFRELEASE -eq "true" ){
-	$ESAUSERNAME = Read-Host "Please input the ESA/SMA Username"
-	$ESAPASSWORD = Read-Host -assecurestring "Please input the Password"
-	$ESACREDENTIAL = [System.Convert]::ToBase64String([System.Text.Encoding]::ASCII.GetBytes($ESAUSERNAME+":"+$([System.Runtime.InteropServices.Marshal]::PtrToStringAuto([System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($ESAPASSWORD)))))
-}
-
-function Submit-CHECKPHISH {
-	Write-OutPut "CheckPhish Scan Report: " >> $LOGFILE
-	$HEADERS = @{ "Content-Type" = "application/json" }
-	$SCANBODY = @{ "urlInfo" = @{ "url" = "$URL"} ; "apiKey" = "$CHECKPHISH_API_KEY" }
-	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://developers.checkphish.ai/api/neo/scan' -Headers $HEADERS -Body $(convertto-json($SCANBODY))
-	if ( [string]::IsNullOrEmpty($SCAN.errorMessage) ) {
-		Start-Sleep -s 60
-		$RESULTBODY = @{ "apiKey" = "$CHECKPHISH_API_KEY" ; "jobID" = "$($SCAN.jobID)" ; "insights" = $true }
-		$RESULTS = Invoke-RestMethod -Method 'POST' -Uri 'https://developers.checkphish.ai/api/neo/scan/status' -Headers $HEADERS -Body $(convertto-json($RESULTBODY))
-		Write-OutPut "ScanResultsDisposition:    ",$($RESULTS.disposition) >> $LOGFILE
-		Write-OutPut "ScanReportURL:             ",$($RESULTS.insights) >> $LOGFILE
-		Write-OutPut "ScreenShotURL:             ",$($RESULTS.screenshot_path) >> $LOGFILE
-		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-	}else {
-		Write-OutPut $SCAN.errorMessage >> $LOGFILE
-		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-	}
-}
 
 function Google-Safe-Browsing {
 	Write-OutPut "Google Safe Browsing Scan Report: " >> $LOGFILE
 	$BODY = @()
-	$BODY +=[pscustomobject]@{"client" = @{"clientId" = "company"; "clientVersion" = "1.0"}; "threatInfo" = @{"threatTypes" = "MALWARE","SOCIAL_ENGINEERING"; "platformTypes" = "WINDOWS"; "threatEntryTypes" = "URL"; "threatEntries" = @{"url" = "$URL"}}}
+	$BODY +=[pscustomobject]@{"client" = @{"clientId" = "eHealth Saskatche"; "clientVersion" = "1.0"}; "threatInfo" = @{"threatTypes" = "MALWARE","SOCIAL_ENGINEERING"; "platformTypes" = "WINDOWS"; "threatEntryTypes" = "URL"; "threatEntries" = @{"url" = "$URL"}}}
 	$HEADERS = @{ 'Content-Type' = "application/json" }
 	$JSONBODY = $BODY | ConvertTo-Json
 	$Uri = 'https://safebrowsing.googleapis.com/v4/threatMatches:find?key='+ $GOOGLE_API_KEY
@@ -230,6 +196,7 @@ function Google-Safe-Browsing {
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	 }else{
 		$ThreatType = $Results | select -expand matches | select threatType
+		if ( ($ThreatType.threatType -eq "SOCIAL_ENGINEERING") -or ($ThreatType.threatType -eq "MALWARE") -or ($ThreatType.threatType -eq "POTENTIALLY_HARMFUL_APPLICATION") ) { $global:enable_SecureX = $true } else { $global:enable_SecureX = $false }
 		Write-OutPut "Google Safe Browsing Scan Results:    ",$($ThreatType) >> $LOGFILE
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	}
@@ -276,8 +243,10 @@ function Submit-URL-Virustotal {
 	Write-OutPut $PERMALINK >> $LOGFILE
 	Write-OutPut "VirusTotal URL Scan Stats: " >> $LOGFILE
 	Write-OutPut $SCANRESULTS.data.attributes.last_analysis_stats >> $LOGFILE
+	if ( ($SCANRESULTS.data.attributes.last_analysis_stats.malicious -gt 0) -or ($SCANRESULTS.data.attributes.last_analysis_stats.suspicious -gt 0) ) { $global:enable_SecureX = $true } else { $global:enable_SecureX = $false }
 	Write-OutPut "VirusTotal URL COMMUNITY VOTES : " >> $LOGFILE
 	Write-OutPut $SCANRESULTS.data.attributes.total_votes >> $LOGFILE
+	if ( $SCANRESULTS.data.attributes.total_votes.malicious -gt 0 ) { $global:enable_SecureX = $true } else { $global:enable_SecureX = $false }
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 }
 
@@ -340,28 +309,13 @@ function FromEmailAttachment {
 	$AdoDbStream = New-Object -ComObject ADODB.Stream
 	$AdoDbStream.Open()
 	$AdoDbStream.LoadFromFile($Args[0])
-	$CdoMessage = New-Object -ComObject CDO.Message
+	$global:CdoMessage = New-Object -ComObject CDO.Message
 	$CdoMessage.DataSource.OpenObject($AdoDbStream,"_Stream")
 	Write-OutPut "===From:    ",$($CdoMessage.From) >> $LOGFILE
 	Write-OutPut "===To:    ",$($CdoMessage.To) >> $LOGFILE
 	Write-OutPut "===Subject:    ",$($CdoMessage.Subject) >> $LOGFILE
 	Write-OutPut "===DateTimeReceived:    ",$($CdoMessage.SentOn) >> $LOGFILE
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-	if ( $ENABLEESASPAMBL -eq "true"){
-		if ( ($EMAIL.ToRecipients.Address -eq "blockforme@esa.company.com") -or ($EMAIL.ToRecipients.Address -eq "blockforall@esa.company.com")  ){
-			ESASpamQuarantine
-		}
-	}
-	if ( $ENABLESELFRELEASE -eq "true"){
-		if ( ($EMAIL.ToRecipients.Address -eq "release@esa.company.com") ){
-			BlockedMailSelfRelease
-		}
-	}
-	if ( ($EMAIL.ToRecipients.Address -eq "investigation@esa.company.com") ){
-		$global:INVESTIGATION = $true
-	}else{
-		$global:INVESTIGATION = $false
-	}
 	$TextBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:textdescription").Value
 	$HTMLBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:htmldescription").Value
 	$EmailBODY = $TextBody + $HTMLBody + $EMLData
@@ -382,7 +336,7 @@ function FromEmailAttachment {
 		$FILENAME = $CdoMessage.Attachments.Item($i).FileName
 		$AttachmentPATTERN = """$FILENAME""(.*?)  --$BOUNDARY"
 		$ATTACHDATA = [regex]::match($EMLData, $AttachmentPATTERN).Groups[1].Value
-		if ( ($($ContentMediaType|%{$_.Split('/')[0];}) -eq "application") -and (-not [string]::IsNullOrEmpty($FILENAME))){
+		if ( -not [string]::IsNullOrEmpty($FILENAME) ){
 			$TRIMNUM = $ATTACHDATA.LastIndexOf("  ")+2
 			$ATTACHMENTDATA = $ATTACHDATA.Remove(0,$TRIMNUM)
 			$ATTFILENAME = ($DOWNLOADDIRECTORY + $FILENAME)
@@ -399,13 +353,14 @@ function FromEmailAttachment {
 				if ( $EXTENSION -eq ".pdf" ){
 					Write-OutPut "=====================Extract URLs from the PDF file=====================" >> $LOGFILE
 					ExtractURLFromPDFHTML
+				}elseif ( ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".htm") ){
+					Write-OutPut "=====================Extract URLs from the HTML file=====================" >> $LOGFILE
+					ExtractURLFromPDFHTML
 				}else{
-					if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
-						Submit-FILE-Virustotal
-						Submit-FILE-OPSWAT
-					}
-					}
-			} else {
+					Submit-FILE-Virustotal
+					Submit-FILE-OPSWAT
+				}
+			}else {
 				Write-OutPut "********************************************************************" > $LOGFILE
 				Write-Output "Exception Error:" $ExceptionError >> $LOGFILE   
 				Write-OutPut "********************************************************************" > $LOGFILE
@@ -413,85 +368,6 @@ function FromEmailAttachment {
 		}
 	}
 }
-
-function ESASpamQuarantine {
-	$regex = [regex]"\<(.*)\>"
-	$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
-	if ( ($EMAIL.ToRecipients.Address -eq "blockforall@esa.company.com") ){
-		$Blocklist_recipient = $('.*@'+$regex.match($($CdoMessage.To)).Groups[1].value.split("@")[1]).ToLower()
-		$Blocklist_recipient_domain = $('.*@'+$regex.match($($CdoMessage.To)).Groups[1].value.split("@")[1]).ToLower()
-
-	}else{
-		if ( ($EMAIL.ToRecipients.Address -eq "blockforme@esa.company.com") ){
-			$Blocklist_recipient = $($regex.match($($CdoMessage.To)).Groups[1].value).ToLower()
-			$Blocklist_recipient_domain = $('.*@'+$regex.match($($CdoMessage.To)).Groups[1].value.split("@")[1]).ToLower()
-		}
-	}
-	$HEADERS = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-	$HEADERS.Add("Authorization", "Basic $ESACREDENTIAL")
-	$HEADERS.Add("Content-Type", "text/plain")
-	$SenderList = $(Invoke-RestMethod -Method 'GET' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist?action=view&quarantineType=spam&viewBy=recipient&search=$Blocklist_recipient" -Headers $HEADERS).data.senderList
-	$SenderList_domain = $(Invoke-RestMethod -Method 'GET' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist?action=view&quarantineType=spam&viewBy=recipient&search=$Blocklist_recipient_domain" -Headers $HEADERS).data.senderList
-	if ( ([string]::IsNullOrEmpty($SenderList)) -and ([string]::IsNullOrEmpty($SenderList_domain)) ){
-		$BODY = "{ `n`"action`": `"add`", `n`"quarantineType`": `"spam`", `n`"viewBy`": `"recipient`", `n`"senderList`":  [`"$Blocklist_Sender`"], `n`"recipientAddresses`": [`"$Blocklist_recipient`"] `n}"
-		$Response_1 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
-		ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$HOST1 "slblconfig EXPORT"
-		$Response_2 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL2/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
-		ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$HOST2 "slblconfig EXPORT"
-		Write-OutPut "********************************************************************" >> $LOGFILE
-		Write-Output $Response_1 | ConvertTo-Json >> $LOGFILE
-		Write-Output $Response_2 | ConvertTo-Json >> $LOGFILE
-		Write-OutPut "********************************************************************" >> $LOGFILE
-	}else{
-		if ( ($Blocklist_Sender -in $SenderList) -or ($Blocklist_Sender -in $SenderList_domain) ){
-			Write-OutPut "********************************************************************" >> $LOGFILE
-			Write-OutPut "$Blocklist_Sender was already blocked in $Blocklist_recipient Blocklist." >> $LOGFILE
-			Write-OutPut "********************************************************************" >> $LOGFILE
-		}else{
-			$BODY = "{ `n`"action`": `"append`", `n`"quarantineType`": `"spam`", `n`"viewBy`": `"sender`", `n`"senderAddresses`":  [`"$Blocklist_Sender`"], `n`"recipientList`": [`"$Blocklist_recipient`"] }"
-			$Response_1 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL1/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
-			ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$HOST1 "slblconfig EXPORT"
-			$Response_2 = Invoke-RestMethod -Method 'POST' -Uri "$ESAURL2/esa/api/v2.0/quarantine/blocklist" -Headers $HEADERS -Body $BODY
-			ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$HOST2 "slblconfig EXPORT"
-			Write-OutPut "********************************************************************" >> $LOGFILE
-			Write-OutPut "*************************Block the Sender***************************" >> $LOGFILE
-			Write-OutPut "********************************************************************" >> $LOGFILE
-			Write-Output $Response_1 | ConvertTo-Json >> $LOGFILE
-			Write-Output $Response_2 | ConvertTo-Json >> $LOGFILE   
-			Write-OutPut "********************************************************************" >> $LOGFILE
-		}
-	}
-}
-
-
-function BlockedMailSelfRelease {
-	$regex = [regex]"Message ID\:.*"
-	$Message_ID_ESA = $($regex.match($($CdoMessage.TextBody)).value) | %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
-	$SMA_MAIL_LOGS = ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$SMA "grep $Message_ID_ESA mail_logs" | findstr "MID"
-	$regex_MID = [regex]"MID .* \("
-	$Message_ID = $regex_MID.match($SMA_MAIL_LOGS).Value.split(" ")[1]
-	$HEADERS = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-	$HEADERS.Add("Authorization", "Basic $ESACREDENTIAL")
-	$HEADERS.Add("Content-Type", "text/plain")
-	$BODY = "{ `n`"action`": `"release`", `n`"mids`": [$Message_ID], `n`"quarantineName`": `"$QUARANTINENAME`", `n`"quarantineType`": `"pvo`" `n}"
-	$Response = Invoke-RestMethod -Method 'POST' -Uri "$SMAURL/sma/api/v2.0/quarantine/messages" -Headers $HEADERS -Body $BODY
-	$SMTPSERVER = Get-Content .\init.conf | findstr SMTPSERVER |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-	$REPLYTO = $($EMAIL.From.Address.ToString())
-	$EMAIBODY = 'Message Information:' + "`r`n" + 'Email From: ' + $($CdoMessage.From) + "`r`n" + 'Subject: ' + $($CdoMessage.Subject) + "`r`n" + 'Date: ' + $($CdoMessage.SentOn) + "`r`n" + 'Message ID: ' + $Message_ID_ESA
-	if ( $Response.data.totalCount -eq 0 ){
-		$REPLYSUBJECT = "AUTO-REPLY/Blocked Email not found OR released already--- "+$Message_ID_ESA
-	}
-	if ( $Response.data.totalCount -eq 1 ){
-		$REPLYSUBJECT = "AUTO-REPLY/Blocked Email released successfully--- "+$Message_ID_ESA
-	}
-	Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Subject $REPLYSUBJECT -Body $EMAIBODY
-	Write-OutPut "********************************************************************" >> $LOGFILE
-	Write-OutPut "*****************Release Email From Quarantine**********************" >> $LOGFILE
-	Write-OutPut "********************************************************************" >> $LOGFILE
-	Write-Output $Response | ConvertTo-Json >> $LOGFILE
-	Write-OutPut "********************************************************************" >> $LOGFILE
-}
-
 
 function ConvertLogToHTML {
 	$File = Get-Content $LOGFILE
@@ -535,7 +411,11 @@ function ExtractURLFromPDFHTML {
 			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 			CheckRedirectedURL
 			}
-	}else{ Write-OutPut "=====================No URL in the PDF/HTML file needs to scan=====================" >> $LOGFILE }
+	}else{ 
+		Write-OutPut "=====================No URL in the PDF/HTML file needs to scan=====================" >> $LOGFILE 
+		Submit-FILE-Virustotal
+		Submit-FILE-OPSWAT
+		}
 }
 
 function CheckRedirectedURL {
@@ -553,123 +433,88 @@ function CheckRedirectedURL {
 				Write-Output "    |--> The Redirected URL is:" $URL >> $LOGFILE
 				Submit-URL-Virustotal
 				Submit-URLSCAN
-				Submit-CHECKPHISH
 				Google-Safe-Browsing
-				SecureX-Investigation
+				if ( $global:enable_SecureX ) {
+					.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported"
+					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					.\secureX.ps1 $URL
+					Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
+						$regex = [regex]"\<(.*)\>"
+						$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
+					}else{
+						$regex = [regex]"From:.*[\[\<](.*)[\]\>]"
+						$regex_eml = '^([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)$'
+						$regex_mailto = '^mailto:'
+						if ( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_eml ) { $Blocklist_Sender = $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}).ToLower() }elseif( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_mailto ) { $Blocklist_Sender = $($($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -split ":" ,0)[1].ToLower() }
+						}
+					.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL
+					Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+				}
 			}else{
 				if ( $webResponse.ResponseUri.OriginalString -eq $webResponse.ResponseUri.AbsoluteUri )  {
 					Write-Output "No Redirection, Will scan the Original URL" >> $LOGFILE
 					Submit-URL-Virustotal
 					Submit-URLSCAN
-					Submit-CHECKPHISH
 					Google-Safe-Browsing
-					SecureX-Investigation
+					if ( $global:enable_SecureX ) {
+						.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported"
+						Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
+						Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+						.\secureX.ps1 $URL
+						Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
+						Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+						if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
+							$regex = [regex]"\<(.*)\>"
+							$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
+						}else{
+							$regex = [regex]"From:.*[\[\<](.*)[\]\>]"
+							$regex_eml = '^([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)$'
+							$regex_mailto = '^mailto:'
+							if ( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_eml ) { $Blocklist_Sender = $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}).ToLower() }elseif( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_mailto ) { $Blocklist_Sender = $($($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -split ":" ,0)[1].ToLower() }
+						}
+						.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL
+						Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+						Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					}
 				}
 			}
 		}else{
-			Write-Output "Exception Error:" $ExceptionError >> $LOGFILE
-			Write-Output "Will scan the Original URL" >> $LOGFILE
+			Write-Output "No Auto Redirect for this URL. Will scan the Original URL" >> $LOGFILE
 			Submit-URL-Virustotal
 			Submit-URLSCAN
-			Submit-CHECKPHISH
 			Google-Safe-Browsing
-			SecureX-Investigation
+			if ( $global:enable_SecureX ) {
+				.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported"
+				Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
+				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+				.\secureX.ps1 $URL
+				Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
+				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+				if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
+					$regex = [regex]"\<(.*)\>"
+					$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
+				}else{
+					$regex = [regex]"From:.*[\[\<](.*)[\]\>]"
+					$regex_eml = '^([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)$'
+					$regex_mailto = '^mailto:'
+					if ( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_eml ) { $Blocklist_Sender = $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}).ToLower() }elseif( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_mailto ) { $Blocklist_Sender = $($($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -split ":" ,0)[1].ToLower() }
+				}
+				.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL
+				Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+			}
 		}
 		Get-Job | Wait-Job
-		$webResponse.Close()
+#		$webResponse.Close()
 	}else { 
 		Write-Output "Exception Error:" $ExceptionError >> $LOGFILE
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 		}
 }
-
-
-function Threat_Response_authentication {
-	$oAuthUri = "https://visibility.amp.cisco.com/iroh/oauth2/token"
-
-	$headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-	$headers.Add("Authorization", "Basic $([System.Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($SECUREX_CLIENT_ID + ":" + $SECUREX_CLIENT_PASSWORD)))")
-	$headers.Add("Content-Type", "application/x-www-form-urlencoded")
-	$headers.Add("Accept", "application/json")
-
-	$authBody = @{
-		grant_type = 'client_credentials'
-	}
-
-	$authResponse = Invoke-RestMethod -Method Post -Uri $oAuthUri -Headers $headers -Body $authBody -ErrorAction Stop
-	$global:Threat_Response_token = $authResponse.access_token
-	$global:Threat_Response_tokenexpire = $authResponse.expires_in
-	return $Threat_Response_token, $Threat_Response_tokenexpire
-}
-
-function SecureX-Investigation {
-	Threat_Response_authentication
-	Write-OutPut "SecureX Investigation Report: " >> $LOGFILE
-	$headers = @{
-		'Content-Type' = 'application/json'
-		Accept = 'application/json'
-		Authorization = "Bearer $Threat_Response_token"
-	}
-	$body = ConvertTo-Json -InputObject @{ 'content' = $URL }
-	$inspect_response = Invoke-WebRequest -Method Post -Uri "https://visibility.amp.cisco.com/iroh/iroh-inspect/inspect" -Headers $headers -Body $body -ErrorAction Stop
-	
-	$headers = @{
-		'Content-Type' = 'application/json'
-		Accept = 'application/json'
-		Authorization = "Bearer $Threat_Response_token"
-	}
-	$body = $inspect_response.Content
-	$response = Invoke-WebRequest -Method Post -Uri "https://visibility.amp.cisco.com/iroh/iroh-enrich/observe/observables" -Headers $headers -Body $body -ErrorAction Stop
-	$results = $response.Content | ConvertFrom-Json
-	for($i=0;$i -le $results.data.length;$i++){
-		$module = $results.data[$i].module
-		if ( $module -eq  "Talos Intelligence" ) {
-			Write-OutPut "Talos Intelligence Investigation Results: " >> $LOGFILE
-			foreach ( $talos_results in $results.data[$i].data.verdicts.docs ){
-				$ta_result = $talos_results.observable.value+" , "+$talos_results.disposition_name
-				Write-OutPut $ta_result >> $LOGFILE
-			}
-			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-		}
-		if ( $module -eq  "Umbrella" ) {
-			$title = "Umbrella Investigation Results, " + $($results.data[$i].data.sightings.docs[0].description -split 'by', 0)[0] + "by:"
-			Write-OutPut $title >> $LOGFILE
-			foreach ($umbrella_results in $results.data[$i].data.sightings.docs){
-				$endpoint = $($umbrella_results.description -split 'by', 0)[1]
-				Write-OutPut $endpoint >> $LOGFILE
-			}
-			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-		}
-		if ( $module -eq  "SMA Email" ) {
-			Write-OutPut "SMA Email Investigation Results, Following e-mail address were related to the URLs/Domains:" >> $LOGFILE
-			$Outgoing_list = @()
-			$Incoming_list = @()
-			for($j=0;$j -le $results.data[$i].data.sightings.docs.length;$j++){
-				if ($results.data[$i].data.sightings.docs[$j].description -match "Outgoing"){
-					$email_mid = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "cisco_mid"})){$key.value}
-					$email_subject = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "email_subject"})){$key.value}
-					$email_address = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "email"})){$key.value}
-					$outgoing_array = $($email_address | Get-Unique), $($($email_mid -split '-')[0] | Get-Unique), $($email_subject | Get-Unique)
-					$Outgoing_list += ,$outgoing_array
-				}
-				if ($results.data[$i].data.sightings.docs[$j].description -match "Incoming"){
-					$email_mid = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "cisco_mid"})){$key.value}
-					$email_subject = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "email_subject"})){$key.value}
-					$email_address = foreach($key in $($results.data[$i].data.sightings.docs[$j].relations.related | where-Object {$_.type -eq "email"})){$key.value}
-					$incoming_array = $($email_address | Get-Unique), $($($email_mid -split '-')[0] | Get-Unique), $($email_subject | Get-Unique)
-					$Incoming_list += ,$incoming_array
-				}
-			}
-			Write-OutPut "Incoming Email List:" >> $LOGFILE
-			Write-OutPut $Incoming_list | % { $_ -join ','} >> $LOGFILE
-			Write-OutPut "--------------------------------------------------------------------" >> $LOGFILE
-			Write-OutPut "Outgoing Email List:" >> $LOGFILE
-			Write-OutPut $Outgoing_list | % { $_ -join ','} >> $LOGFILE
-			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-		}
-	}
-}
-
 
 function MAIN {
 	date
@@ -685,6 +530,7 @@ function MAIN {
 	$PROPERTYSET = new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.BasePropertySet]::FirstClassProperties)
 	$PROPERTYSET.RequestedBodyType = [Microsoft.Exchange.WebServices.Data.BodyType]::Text
 	[System.Net.ServicePointManager]::SecurityProtocol = @("Tls12","Tls11","Tls","Ssl3")
+#	[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12
 #	Use .Net Object to ignore self-signed certificate
 	if ("TrustAllCertsPolicy" -as [type]) {}
 	else {
@@ -706,6 +552,7 @@ function MAIN {
 		foreach ( $EMAIL in $ITEMS.Items ){
 			# only get unread emails
 			if( $EMAIL.isread -eq $false ){
+				if( ($EMAIL.Subject -ne "Thank you for contacting the eHealth Saskatchewan Service Desk") -or ($EMAIL.Subject -ne "Service Desk Auto Reply for emailsecurity@ehealthsask.ca") ){
 					# load the property set to get to the body
 					$EMAIL.load($PROPERTYSET)
 					$RANDOMID = -join ((48..57) + (97..122) | Get-Random -Count 20 | % {[char]$_})
@@ -792,14 +639,11 @@ function MAIN {
 					ConvertLogToHTML
 					$REPLYSUBJECT = "AUTO-REPLY/Security Scan Report-- "+$($EMAIL.Subject)
 					$SMTPSERVER = Get-Content .\init.conf | findstr SMTPSERVER |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-					if ($INVESTIGATION) {
-						$REPLYTO = $EMAIL.From.Address.ToString()
-					}else{
-						$REPLYTO = Get-Content .\init.conf | findstr REPLYTO |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-					}
+					$REPLYTO = Get-Content .\init.conf | findstr REPLYTO |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 					$REPLYCC = Get-Content .\init.conf | findstr REPLYCC |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 					$EMAIBODY = '%CUSTOMER_EMAIL=' + $($EMAIL.From.Address) + "`r`n" + '%CUSTOMER=' + $($EMAIL.From.Name) + "`r`n" + '%SUMMARY=Security Scan Report--' + $($EMAIL.Subject)
 					Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Cc $REPLYCC -Subject $REPLYSUBJECT -Body $EMAIBODY -Attachments $HTMLREPFILE
+				}
 			}
 			$EMAIL.isRead = $true
 			$EMAIL.Update([Microsoft.Exchange.WebServices.Data.ConflictResolutionMode]::AutoResolve)
