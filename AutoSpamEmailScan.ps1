@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 5.0.0
+.VERSION 5.0.1
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	
+	Creation Date:  <05/03/2022>
+	Purpose/Change: optimize the method to extract email address from the mail body.
 	
 	Creation Date:  <04/28/2022>
 	Purpose/Change: Instead the "Cisco SecureX Investigation Module" with the "secureX.ps1"
@@ -183,6 +186,8 @@ $GOOGLE_API_KEY = Get-Content .\init.conf | findstr GOOGLE_API_KEY |  %{ $_.Spli
 $OPSWAT_API_KEY = Get-Content .\init.conf | findstr OPSWAT_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $CHECKPHISH_API_KEY = Get-Content .\init.conf | findstr CHECKPHISH_API_KEY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 
+$global:enable_SecureX = $false
+
 function Google-Safe-Browsing {
 	Write-OutPut "Google Safe Browsing Scan Report: " >> $LOGFILE
 	$BODY = @()
@@ -196,7 +201,7 @@ function Google-Safe-Browsing {
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	 }else{
 		$ThreatType = $Results | select -expand matches | select threatType
-		if ( ($ThreatType.threatType -eq "SOCIAL_ENGINEERING") -or ($ThreatType.threatType -eq "MALWARE") -or ($ThreatType.threatType -eq "POTENTIALLY_HARMFUL_APPLICATION") ) { $global:enable_SecureX = $true } else { $global:enable_SecureX = $false }
+		if ( ($ThreatType.threatType -eq "SOCIAL_ENGINEERING") -or ($ThreatType.threatType -eq "MALWARE") -or ($ThreatType.threatType -eq "POTENTIALLY_HARMFUL_APPLICATION") ) { $global:enable_SecureX = $true }
 		Write-OutPut "Google Safe Browsing Scan Results:    ",$($ThreatType) >> $LOGFILE
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	}
@@ -243,10 +248,10 @@ function Submit-URL-Virustotal {
 	Write-OutPut $PERMALINK >> $LOGFILE
 	Write-OutPut "VirusTotal URL Scan Stats: " >> $LOGFILE
 	Write-OutPut $SCANRESULTS.data.attributes.last_analysis_stats >> $LOGFILE
-	if ( ($SCANRESULTS.data.attributes.last_analysis_stats.malicious -gt 0) -or ($SCANRESULTS.data.attributes.last_analysis_stats.suspicious -gt 0) ) { $global:enable_SecureX = $true } else { $global:enable_SecureX = $false }
+	if ( ($SCANRESULTS.data.attributes.last_analysis_stats.malicious -gt 0) -or ($SCANRESULTS.data.attributes.last_analysis_stats.suspicious -gt 0) ) { $global:enable_SecureX = $true }
 	Write-OutPut "VirusTotal URL COMMUNITY VOTES : " >> $LOGFILE
 	Write-OutPut $SCANRESULTS.data.attributes.total_votes >> $LOGFILE
-	if ( $SCANRESULTS.data.attributes.total_votes.malicious -gt 0 ) { $global:enable_SecureX = $true } else { $global:enable_SecureX = $false }
+	if ( ($SCANRESULTS.data.attributes.total_votes.malicious -gt 0) ) { $global:enable_SecureX = $true }
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 }
 
@@ -434,6 +439,7 @@ function CheckRedirectedURL {
 				Submit-URL-Virustotal
 				Submit-URLSCAN
 				Google-Safe-Browsing
+				Write-OutPut "===================================================================="  >> $LOGFILE
 				if ( $global:enable_SecureX ) {
 					.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported"
 					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
@@ -445,10 +451,9 @@ function CheckRedirectedURL {
 						$regex = [regex]"\<(.*)\>"
 						$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
 					}else{
-						$regex = [regex]"From:.*[\[\<](.*)[\]\>]"
-						$regex_eml = '^([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)$'
-						$regex_mailto = '^mailto:'
-						if ( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_eml ) { $Blocklist_Sender = $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}).ToLower() }elseif( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_mailto ) { $Blocklist_Sender = $($($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -split ":" ,0)[1].ToLower() }
+						$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
+						$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
+						if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
 						}
 					.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL
 					Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
@@ -471,10 +476,9 @@ function CheckRedirectedURL {
 							$regex = [regex]"\<(.*)\>"
 							$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
 						}else{
-							$regex = [regex]"From:.*[\[\<](.*)[\]\>]"
-							$regex_eml = '^([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)$'
-							$regex_mailto = '^mailto:'
-							if ( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_eml ) { $Blocklist_Sender = $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}).ToLower() }elseif( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_mailto ) { $Blocklist_Sender = $($($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -split ":" ,0)[1].ToLower() }
+							$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
+							$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
+							if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
 						}
 						.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL
 						Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
@@ -498,10 +502,9 @@ function CheckRedirectedURL {
 					$regex = [regex]"\<(.*)\>"
 					$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
 				}else{
-					$regex = [regex]"From:.*[\[\<](.*)[\]\>]"
-					$regex_eml = '^([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)$'
-					$regex_mailto = '^mailto:'
-					if ( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_eml ) { $Blocklist_Sender = $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}).ToLower() }elseif( $($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -match $regex_mailto ) { $Blocklist_Sender = $($($EMAIL.Body.Text | Select-String -Pattern $regex -AllMatches | ForEach-Object {$_.matches.groups[-1].value}) -split ":" ,0)[1].ToLower() }
+					$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
+					$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
+					if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
 				}
 				.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL
 				Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
