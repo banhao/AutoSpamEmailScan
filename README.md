@@ -4,12 +4,12 @@
 
 UPDATE: Version 5.0.1 May 03, 2022
 
--optimize the method to extract email address from the mail body.
+ - optimize the method to extract email address from the mail body.
 
 
 UPDATE: Version 5.0.0 April 29, 2022
 
--This version I removed some modules and replaced them by using independ powershell scripts. So I want this one can be more flexible if you want to use this script as a main frame and bulid your own work flow.
+ - This version I removed some modules and replaced them by using independ powershell scripts. So I want this one can be more flexible if you want to use this script as a main frame and bulid your own work flow.
 
 <img src="/Work Flow.jpg">
 
