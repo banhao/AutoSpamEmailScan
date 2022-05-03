@@ -2,6 +2,11 @@
 [![Minimum Supported PowerShell Version](https://img.shields.io/badge/PowerShell-5.1+-purple.svg)](https://github.com/PowerShell/PowerShell) ![Cross Platform](https://img.shields.io/badge/platform-windows-lightgrey)
 [![PowerShell Gallery Version](https://img.shields.io/powershellgallery/v/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan) [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan)
 
+UPDATE: Version 5.0.1 May 03, 2022
+
+optimize the method to extract email address from the mail body.
+
+
 UPDATE: Version 5.0.0 April 29, 2022
 
 This version I removed some modules and replaced them by using independ powershell scripts. So I want this one can be more flexible if you want to use this script as a main frame and bulid your own work flow.
