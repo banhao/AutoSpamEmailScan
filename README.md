@@ -2,6 +2,13 @@
 [![Minimum Supported PowerShell Version](https://img.shields.io/badge/PowerShell-5.1+-purple.svg)](https://github.com/PowerShell/PowerShell) ![Cross Platform](https://img.shields.io/badge/platform-windows-lightgrey)
 [![PowerShell Gallery Version](https://img.shields.io/powershellgallery/v/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan) [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan)
 
+UPDATE: Version 5.1.0 May 26, 2022
+
+- Add "RedirectURL.py" to replace the powershell script.
+			Add "pdf2url.py" to replace the "Bytescout.PDF2HTML.dll"
+			Add "Submit_FILE_Virustotal.py" to replace the "Submit-FILE-Virustotal" and call VirusTotal V3 API
+
+
 UPDATE: Version 5.0.1 May 03, 2022
 
  - optimize the method to extract email address from the mail body.
