@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 5.0.1
+.VERSION 5.1.0
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,13 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <05/26/2022>
+	Purpose/Change: Add "RedirectURL.py" to replace the powershell script.
+					Add "pdf2url.py" to replace the "Bytescout.PDF2HTML.dll"
+					Add "Submit_FILE_Virustotal.py" to replace the "Submit-FILE-Virustotal" and call VirusTotal V3 API
+	
+	Creation Date:  <05/09/2022>
+	Purpose/Change: Add "selenium_simulator.py" to open HTML file on local and get screenshot. 
 	
 	Creation Date:  <05/03/2022>
 	Purpose/Change: optimize the method to extract email address from the mail body.
@@ -173,7 +180,6 @@ if ( [string]::IsNullOrEmpty($CREDENTIAL) -and [string]::IsNullOrEmpty($SALT) ){
 $DOMAIN = Get-Content .\init.conf | findstr DOMAIN |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EMAILADDRESS = Get-Content .\init.conf | findstr EMAILADDRESS |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EWSDLLPATH = Get-Content .\init.conf | findstr EWSDLLPATH |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$PDF2HTMLDLLPATH = Get-Content .\init.conf | findstr PDF2HTMLDLLPATH |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $DOWNLOADDIRECTORY =  Get-Content .\init.conf | findstr DOWNLOADDIRECTORY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $REPORTSDIRECTORY = Get-Content .\init.conf | findstr REPORTSDIRECTORY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $EXTENSIONARRAY = Get-Content .\init.conf | findstr EXTENSIONARRAY |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
@@ -255,23 +261,6 @@ function Submit-URL-Virustotal {
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 }
 
-function Submit-FILE-Virustotal {
-	$BODY = @{ "apikey" = "$VIRUSTOTAL_API_KEY"; "file" = "$FILEPATH" }
-	$SCAN = Invoke-RestMethod -Method 'POST' -Uri 'https://www.virustotal.com/vtapi/v2/file/scan' -Body $BODY
-	$HASH = $SCAN.sha256
-	Start-Sleep -s 60
-	$HEADERS = @{ "x-apikey" = "$VIRUSTOTAL_API_KEY" }
-	$SCAN = Invoke-RestMethod -Method 'GET' -Uri "https://www.virustotal.com/api/v3/files/$HASH" -Headers $HEADERS
-	$PERMALINK = "https://virustotal.com/gui/file/"+$SCAN.data.id+"/detection"
-	Write-OutPut "VirusTotal File Scan Report: " >> $LOGFILE
-	Write-OutPut $PERMALINK >> $LOGFILE
-	Write-OutPut "VirusTotal File Scan Stats: " >> $LOGFILE
-	Write-OutPut $SCAN.data.attributes.last_analysis_stats >> $LOGFILE
-	Write-OutPut "VirusTotal File COMMUNITY VOTES : " >> $LOGFILE
-	Write-OutPut $SCAN.data.attributes.total_votes >> $LOGFILE
-	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-}
-
 function Submit-FILE-OPSWAT {
 	$URI = 'https://api.metadefender.com/v4/hash/'+$HASH
 	$HEADERS = @{}
@@ -297,14 +286,14 @@ function Submit-FILE-OPSWAT {
 		$RESULTLINK = 'https://metadefender.opswat.com/results#!/file/'+$HASH+'/hash/overview'
 		Write-OutPut $RESULTLINK >> $LOGFILE
 		Write-OutPut "POSITIVES |   TOTAL" >> $LOGFILE
-		Write-OutPut $($SCANRESULT.scan_results.total_detected_avs) "        |  " $($SCANRESULT.scan_results.total_avs) >> $LOGFILE
+		Write-OutPut "$($SCANRESULT.scan_results.total_detected_avs)         |   $($SCANRESULT.scan_results.total_avs)" >> $LOGFILE
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	}else {
 		Write-OutPut "OPSWAT MetaDefender Cloud File Scan Report: " >> $LOGFILE
 		$RESULTLINK = 'https://metadefender.opswat.com/results#!/file/'+$HASH+'/hash/overview'
 		Write-OutPut $RESULTLINK >> $LOGFILE
 		Write-OutPut "POSITIVES |   TOTAL" >> $LOGFILE
-		Write-OutPut $($SCANRESULT.scan_results.total_detected_avs) "        |  " $($SCANRESULT.scan_results.total_avs) >> $LOGFILE
+		Write-OutPut "$($SCANRESULT.scan_results.total_detected_avs)         |   $($SCANRESULT.scan_results.total_avs)" >> $LOGFILE
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	}
 }
@@ -344,10 +333,10 @@ function FromEmailAttachment {
 		if ( -not [string]::IsNullOrEmpty($FILENAME) ){
 			$TRIMNUM = $ATTACHDATA.LastIndexOf("  ")+2
 			$ATTACHMENTDATA = $ATTACHDATA.Remove(0,$TRIMNUM)
-			$ATTFILENAME = ($DOWNLOADDIRECTORY + $FILENAME)
+			$ATTFILENAME = ($DOWNLOADDIRECTORY + $FILENAME.split('.')[0].trim() + "_" + $RANDOMID + "." + $FILENAME.split('.')[-1].trim())
 			$bytes = [Convert]::FromBase64String($ATTACHMENTDATA)
 			[IO.File]::WriteAllBytes($ATTFILENAME, $bytes)
-			Write-OutPut "Downloaded Attachment : "  ($ATTFILENAME) >> $LOGFILE
+			Write-OutPut "Downloaded Attachment : Original File $($FILENAME) Saved As $($ATTFILENAME) " >> $LOGFILE
 			Try { $ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm }
 			Catch [System.SystemException] { $ExceptionError = $_.Exception.Message }
 			if ( [string]::IsNullOrEmpty($ExceptionError) ) {
@@ -355,20 +344,25 @@ function FromEmailAttachment {
 				$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
 				Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
 				$EXTENSION = [System.IO.Path]::GetExtension($ATTFILENAME)
-				if ( $EXTENSION -eq ".pdf" ){
-					Write-OutPut "=====================Extract URLs from the PDF file=====================" >> $LOGFILE
-					ExtractURLFromPDFHTML
-				}elseif ( ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".htm") ){
-					Write-OutPut "=====================Extract URLs from the HTML file=====================" >> $LOGFILE
-					ExtractURLFromPDFHTML
-				}else{
-					Submit-FILE-Virustotal
+				if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
+					Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
+					python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
 					Submit-FILE-OPSWAT
+					Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
+					ExtractURLFromPDFHTML
+					Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
+					python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
+				}else {
+					if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
+						Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
+						python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+						Submit-FILE-OPSWAT
+					}
 				}
 			}else {
-				Write-OutPut "********************************************************************" > $LOGFILE
+				Write-OutPut "********************************************************************" >> $LOGFILE
 				Write-Output "Exception Error:" $ExceptionError >> $LOGFILE   
-				Write-OutPut "********************************************************************" > $LOGFILE
+				Write-OutPut "********************************************************************" >> $LOGFILE
 				}
 		}
 	}
@@ -391,23 +385,21 @@ function ConvertLogToHTML {
 
 function ExtractURLFromPDFHTML {
 	if ( $EXTENSION -eq ".pdf" ){
-		Add-Type -Path $PDF2HTMLDLLPATH
-		$extractor = new-object Bytescout.PDF2HTML.HTMLExtractor
-		$extractor.CheckPermissions = $False
-		$extractor.LoadDocumentFromFile($ATTFILENAME)
-		$BaseName = gci $ATTFILENAME | %{$_.BaseName}
-		$FilePath = Split-Path -path $ATTFILENAME
-		$HTMLFILE = $FilePath+"\"+$BaseName+".html"
-		$extractor.SaveHtmlToFile($HTMLFILE)
-		$extractor.Reset()
+		python pdf2url.py $ATTFILENAME > URLLIST.tmp
+		$URLArrayFromPDF = Get-Content URLLIST.tmp | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
 	}else{
 		$HTMLFILE = $ATTFILENAME
-	}
 		$URLArrayFromHTML = Get-Content $HTMLFILE | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
-		$URLArrayFromPDF = Get-Content $ATTFILENAME | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
+	}
+	if ( ![string]::IsNullOrEmpty($URLArrayFromPDF) -and ![string]::IsNullOrEmpty($URLArrayFromHTML) ) {
 		$URLLIST = $URLArrayFromHTML + $URLArrayFromPDF | Sort-Object | Get-Unique
-		$EXPLIST = $EXEMPTURL | foreach-object { $URLLIST -match $_ }
-		$URLARRAY = @()
+	}elseif( [string]::IsNullOrEmpty($URLArrayFromPDF) -and ![string]::IsNullOrEmpty($URLArrayFromHTML) ) {
+		$URLLIST = $URLArrayFromHTML | Sort-Object | Get-Unique
+	}elseif( ![string]::IsNullOrEmpty($URLArrayFromPDF) -and [string]::IsNullOrEmpty($URLArrayFromHTML) ) {
+		$URLLIST = $URLArrayFromPDF | Sort-Object | Get-Unique
+	}
+	$EXPLIST = $EXEMPTURL | foreach-object { $URLLIST -match $_ }
+	$URLARRAY = @()
 	foreach ($URL in $URLLIST){ if ( $URL -notin $EXPLIST ){$URLARRAY = $URLARRAY += $URL }}
 	# URL is not null or empty do check the URL
 	if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
@@ -416,107 +408,41 @@ function ExtractURLFromPDFHTML {
 			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 			CheckRedirectedURL
 			}
-	}else{ 
-		Write-OutPut "=====================No URL in the PDF/HTML file needs to scan=====================" >> $LOGFILE 
-		Submit-FILE-Virustotal
-		Submit-FILE-OPSWAT
-		}
+	}else{ Write-OutPut "=====================No URL in the PDF/HTML file needs to scan=====================" >> $LOGFILE }
 }
 
 function CheckRedirectedURL {
-	Try { $webRequest = [System.Net.WebRequest]::Create($URL) } Catch { $ExceptionError = $_.Exception.Message }
-	if ( [string]::IsNullOrEmpty($ExceptionError) ) {
-		if ( [string]::IsNullOrEmpty($([URI]$URL).Scheme) ) { $URL = "http://"+$URL }
-		$webRequest.AllowAutoRedirect=$false
-		Try { $webResponse = $webRequest.GetResponse() } Catch { $ExceptionError = $_.Exception.Message }	
-		
-		if ( [string]::IsNullOrEmpty($ExceptionError) ) {
-			if ( ($webResponse.StatusCode -eq "Found") -or ($webResponse.StatusCode -eq "Redirect") ) {
-				Write-Output "The Original URL is:" $URL >> $LOGFILE
-				$URL = $webResponse.GetResponseHeader("Location")	
-				Write-OutPut "    |" >> $LOGFILE
-				Write-Output "    |--> The Redirected URL is:" $URL >> $LOGFILE
-				Submit-URL-Virustotal
-				Submit-URLSCAN
-				Google-Safe-Browsing
-				Write-OutPut "===================================================================="  >> $LOGFILE
-				if ( $global:enable_SecureX ) {
-					.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported"
-					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
-					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-					.\secureX.ps1 $URL
-					Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
-					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-					if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
-						$regex = [regex]"\<(.*)\>"
-						$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
-					}else{
-						$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
-						$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
-						if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
-						}
-					.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL
-					Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
-					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-				}
-			}else{
-				if ( $webResponse.ResponseUri.OriginalString -eq $webResponse.ResponseUri.AbsoluteUri )  {
-					Write-Output "No Redirection, Will scan the Original URL" >> $LOGFILE
-					Submit-URL-Virustotal
-					Submit-URLSCAN
-					Google-Safe-Browsing
-					if ( $global:enable_SecureX ) {
-						.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported"
-						Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
-						Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-						.\secureX.ps1 $URL
-						Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
-						Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-						if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
-							$regex = [regex]"\<(.*)\>"
-							$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
-						}else{
-							$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
-							$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
-							if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
-						}
-						.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL
-						Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
-						Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-					}
-				}
-			}
-		}else{
-			Write-Output "No Auto Redirect for this URL. Will scan the Original URL" >> $LOGFILE
-			Submit-URL-Virustotal
-			Submit-URLSCAN
-			Google-Safe-Browsing
-			if ( $global:enable_SecureX ) {
-				.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported"
-				Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
-				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-				.\secureX.ps1 $URL
-				Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
-				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-				if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
-					$regex = [regex]"\<(.*)\>"
-					$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
-				}else{
-					$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
-					$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
-					if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
-				}
-				.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL
-				Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
-				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-			}
-		}
-		Get-Job | Wait-Job
-#		$webResponse.Close()
-	}else { 
-		Write-Output "Exception Error:" $ExceptionError >> $LOGFILE
+	if ( $URL -like '*safelinks.protection.outlook.com*' ) { $URL = [System.Web.HttpUtility]::ParseQueryString($(New-Object -TypeName System.Uri -ArgumentList $URL).Query)["url"] }
+	Write-Output "The Original URL is:" $URL >> $LOGFILE
+	python RedirectURL.py $URL > URLLIST.tmp
+	$URL = Get-Content URLLIST.tmp | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
+	Write-OutPut "    |" >> $LOGFILE
+	Write-Output "    |--> The Redirected URL is:" $URL >> $LOGFILE
+	Submit-URL-Virustotal
+	Submit-URLSCAN
+	Google-Safe-Browsing
+	Write-OutPut "===================================================================="  >> $LOGFILE
+	if ( $global:enable_SecureX ) {
+		.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported" >> $LOGFILE
+		Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
 		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-		}
+		.\secureX.ps1 $URL >> $LOGFILE
+		Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
+		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+		if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
+			$regex = [regex]"\<(.*)\>"
+			$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
+		}else{
+			$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
+			$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
+			if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
+			}
+		.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
+		Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+		$global:enable_SecureX = $false
+	}
+	Write-OutPut "====================================================================" >> $LOGFILE
 }
 
 function MAIN {
@@ -561,6 +487,7 @@ function MAIN {
 					$RANDOMID = -join ((48..57) + (97..122) | Get-Random -Count 20 | % {[char]$_})
 					$LOGFILE = $REPORTSDIRECTORY+"security-scan-report_"+$RANDOMID+".log"
 					$HTMLREPFILE = $REPORTSDIRECTORY+"security-scan-report_"+$RANDOMID+".html"
+					$SCREENSHOTFILE = $REPORTSDIRECTORY+"screenshot_"+$RANDOMID+".jpg"
 					# output the results - first of all the From, Subject and Date Time Received
 					Write-OutPut "====================================================================" > $LOGFILE
 					Write-OutPut "From:    ",$($EMAIL.From) >> $LOGFILE
@@ -614,27 +541,30 @@ function MAIN {
 									if ( ($EXTENSION -eq ".eml") -or ($EXTENSION -eq ".raw") ){
 										FromEmailAttachment $ATTFILENAME
 									} else{
-											if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") ){
+											if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
+												Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
+												python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+												Submit-FILE-OPSWAT
 												Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
 												ExtractURLFromPDFHTML
-												Submit-FILE-Virustotal
-												Submit-FILE-OPSWAT
+												Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
+												python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
 											}else {
 												if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
-													Submit-FILE-Virustotal
+													python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
 													Submit-FILE-OPSWAT
 												}
 												}
 										}
 								} else {
-									Write-OutPut "********************************************************************" > $LOGFILE
+									Write-OutPut "********************************************************************" >> $LOGFILE
 									Write-Output "Exception Error:" $ExceptionError >> $LOGFILE   
-									Write-OutPut "********************************************************************" > $LOGFILE
+									Write-OutPut "********************************************************************" >> $LOGFILE
 									}
 							} else {
-									Write-OutPut "********************************************************************" > $LOGFILE
+									Write-OutPut "********************************************************************" >> $LOGFILE
 									Write-Output "Exception Error:" $ExceptionError >> $LOGFILE   
-									Write-OutPut "********************************************************************" > $LOGFILE
+									Write-OutPut "********************************************************************" >> $LOGFILE
 								}		
 						}
 					}
@@ -645,7 +575,12 @@ function MAIN {
 					$REPLYTO = Get-Content .\init.conf | findstr REPLYTO |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 					$REPLYCC = Get-Content .\init.conf | findstr REPLYCC |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 					$EMAIBODY = '%CUSTOMER_EMAIL=' + $($EMAIL.From.Address) + "`r`n" + '%CUSTOMER=' + $($EMAIL.From.Name) + "`r`n" + '%SUMMARY=Security Scan Report--' + $($EMAIL.Subject)
-					Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Cc $REPLYCC -Subject $REPLYSUBJECT -Body $EMAIBODY -Attachments $HTMLREPFILE
+					if ( Test-Path -Path $SCREENSHOTFILE ) {
+						$ATTACHMENTS = @($HTMLREPFILE, $SCREENSHOTFILE)	
+						Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Cc $REPLYCC -Subject $REPLYSUBJECT -Body $EMAIBODY -Attachments $ATTACHMENTS
+					}else {
+						Send-MailMessage -SmtpServer $SMTPSERVER -To $REPLYTO -From $EMAILADDRESS -Cc $REPLYCC -Subject $REPLYSUBJECT -Body $EMAIBODY -Attachments $HTMLREPFILE
+					}
 				}
 			}
 			$EMAIL.isRead = $true
