@@ -5,8 +5,8 @@
 UPDATE: Version 5.1.0 May 26, 2022
 
 - Add "RedirectURL.py" to replace the powershell script.
-			Add "pdf2url.py" to replace the "Bytescout.PDF2HTML.dll"
-			Add "Submit_FILE_Virustotal.py" to replace the "Submit-FILE-Virustotal" and call VirusTotal V3 API
+- Add "pdf2url.py" to replace the "Bytescout.PDF2HTML.dll"
+- Add "Submit_FILE_Virustotal.py" to replace the "Submit-FILE-Virustotal" and call VirusTotal V3 API
 
 
 UPDATE: Version 5.0.1 May 03, 2022
