@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 5.1.0
+.VERSION 5.1.1
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <05/30/2022>
+	Purpose/Change: Optimize the module "CheckRedirectedURL", skip scan the URL if the URL contain file types in variable "$EXTENSIONARRAY" 
+	
 	Creation Date:  <05/26/2022>
 	Purpose/Change: Add "RedirectURL.py" to replace the powershell script.
 					Add "pdf2url.py" to replace the "Bytescout.PDF2HTML.dll"
@@ -257,7 +260,6 @@ function Submit-URL-Virustotal {
 	if ( ($SCANRESULTS.data.attributes.last_analysis_stats.malicious -gt 0) -or ($SCANRESULTS.data.attributes.last_analysis_stats.suspicious -gt 0) ) { $global:enable_SecureX = $true }
 	Write-OutPut "VirusTotal URL COMMUNITY VOTES : " >> $LOGFILE
 	Write-OutPut $SCANRESULTS.data.attributes.total_votes >> $LOGFILE
-	if ( ($SCANRESULTS.data.attributes.total_votes.malicious -gt 0) ) { $global:enable_SecureX = $true }
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 }
 
@@ -334,36 +336,42 @@ function FromEmailAttachment {
 			$TRIMNUM = $ATTACHDATA.LastIndexOf("  ")+2
 			$ATTACHMENTDATA = $ATTACHDATA.Remove(0,$TRIMNUM)
 			$ATTFILENAME = ($DOWNLOADDIRECTORY + $FILENAME.split('.')[0].trim() + "_" + $RANDOMID + "." + $FILENAME.split('.')[-1].trim())
-			$bytes = [Convert]::FromBase64String($ATTACHMENTDATA)
-			[IO.File]::WriteAllBytes($ATTFILENAME, $bytes)
-			Write-OutPut "Downloaded Attachment : Original File $($FILENAME) Saved As $($ATTFILENAME) " >> $LOGFILE
-			Try { $ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm }
-			Catch [System.SystemException] { $ExceptionError = $_.Exception.Message }
-			if ( [string]::IsNullOrEmpty($ExceptionError) ) {
-				$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
-				$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
-				Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
-				$EXTENSION = [System.IO.Path]::GetExtension($ATTFILENAME)
-				if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
-					Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
-					python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
-					Submit-FILE-OPSWAT
-					Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
-					ExtractURLFromPDFHTML
-					Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
-					python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
-				}else {
-					if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
+			Try{ $bytes = [Convert]::FromBase64String($ATTACHMENTDATA) } catch { $Exception = $_.Exception }
+			if ( -not ([string]::IsNullOrEmpty($Exception)) ) {
+				Write-Output "Exception Error:" $Exception.description >> $LOGFILE
+				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE 
+			}
+			if ( -not ([string]::IsNullOrEmpty($bytes)) ) { 
+				[IO.File]::WriteAllBytes($ATTFILENAME, $bytes)
+				Write-OutPut "Downloaded Attachment : Original File $($FILENAME) Saved As $($ATTFILENAME) " >> $LOGFILE
+				Try { $ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm }
+				Catch [System.SystemException] { $ExceptionError = $_.Exception.Message }
+				if ( [string]::IsNullOrEmpty($ExceptionError) ) {
+					$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
+					$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
+					Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
+					$EXTENSION = [System.IO.Path]::GetExtension($ATTFILENAME)
+					if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
 						Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
 						python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
 						Submit-FILE-OPSWAT
+						Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
+						ExtractURLFromPDFHTML
+						Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
+						python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
+					}else {
+						if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
+							Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
+							python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+							Submit-FILE-OPSWAT
+						}
 					}
-				}
-			}else {
-				Write-OutPut "********************************************************************" >> $LOGFILE
-				Write-Output "Exception Error:" $ExceptionError >> $LOGFILE   
-				Write-OutPut "********************************************************************" >> $LOGFILE
-				}
+				}else {
+					Write-OutPut "********************************************************************" >> $LOGFILE
+					Write-Output "Exception Error:" $ExceptionError >> $LOGFILE   
+					Write-OutPut "********************************************************************" >> $LOGFILE
+					}
+			}		
 		}
 	}
 }
@@ -385,8 +393,7 @@ function ConvertLogToHTML {
 
 function ExtractURLFromPDFHTML {
 	if ( $EXTENSION -eq ".pdf" ){
-		python pdf2url.py $ATTFILENAME > URLLIST.tmp
-		$URLArrayFromPDF = Get-Content URLLIST.tmp | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
+		$URLArrayFromPDF = & python pdf2url.py $ATTFILENAME
 	}else{
 		$HTMLFILE = $ATTFILENAME
 		$URLArrayFromHTML = Get-Content $HTMLFILE | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
@@ -414,33 +421,97 @@ function ExtractURLFromPDFHTML {
 function CheckRedirectedURL {
 	if ( $URL -like '*safelinks.protection.outlook.com*' ) { $URL = [System.Web.HttpUtility]::ParseQueryString($(New-Object -TypeName System.Uri -ArgumentList $URL).Query)["url"] }
 	Write-Output "The Original URL is:" $URL >> $LOGFILE
-	python RedirectURL.py $URL > URLLIST.tmp
-	$URL = Get-Content URLLIST.tmp | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
-	Write-OutPut "    |" >> $LOGFILE
-	Write-Output "    |--> The Redirected URL is:" $URL >> $LOGFILE
-	Submit-URL-Virustotal
-	Submit-URLSCAN
-	Google-Safe-Browsing
-	Write-OutPut "===================================================================="  >> $LOGFILE
-	if ( $global:enable_SecureX ) {
-		.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported" >> $LOGFILE
-		Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
-		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-		.\secureX.ps1 $URL >> $LOGFILE
-		Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
-		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-		if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
-			$regex = [regex]"\<(.*)\>"
-			$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
-		}else{
-			$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
-			$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
-			if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
+	$OriginalURL = $URL
+	$URLAccessible = & python RedirectURL.py $URL
+	if ($URLAccessible -match "is not accessible.") {
+		Write-OutPut "$($URL) is not accessible." >> $LOGFILE
+	}else{
+		$RedirectedURL = $URLAccessible
+		if ($OriginalURL -eq $RedirectedURL) {
+			Write-OutPut "    |" >> $LOGFILE
+			Write-Output "    |--> The Redirected URL is: $($RedirectedURL)" >> $LOGFILE
+			if (! $EXTENSIONARRAY.contains($(($OriginalURL -split "/")[-1]).split(".")[-1])) {
+				Submit-URL-Virustotal
+				Submit-URLSCAN
+				Google-Safe-Browsing
+				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"  >> $LOGFILE
+				if ( $global:enable_SecureX ) {
+					.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported" >> $LOGFILE
+					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					.\secureX.ps1 $URL >> $LOGFILE
+					Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
+						$regex = [regex]"\<(.*)\>"
+						$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
+					}else{
+						$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
+						$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
+						if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
+						}
+					.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
+					Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					$global:enable_SecureX = $false
+				}
 			}
-		.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
-		Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
-		Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-		$global:enable_SecureX = $false
+		}else{
+			$URL = $OriginalURL
+			if (! $EXTENSIONARRAY.contains($(($URL -split "/")[-1]).split(".")[-1])) {
+				Submit-URL-Virustotal
+				Submit-URLSCAN
+				Google-Safe-Browsing
+				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"  >> $LOGFILE
+				if ( $global:enable_SecureX ) {
+					.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported" >> $LOGFILE
+					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					.\secureX.ps1 $URL >> $LOGFILE
+					Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
+						$regex = [regex]"\<(.*)\>"
+						$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
+					}else{
+						$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
+						$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
+						if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
+						}
+					.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
+					Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					$global:enable_SecureX = $false
+				}
+			}
+			$URL = $RedirectedURL
+			if (! $EXTENSIONARRAY.contains($(($URL -split "/")[-1]).split(".")[-1])) {
+				Submit-URL-Virustotal
+				Submit-URLSCAN
+				Google-Safe-Browsing
+				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"  >> $LOGFILE
+				if ( $global:enable_SecureX ) {
+					.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported" >> $LOGFILE
+					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					.\secureX.ps1 $URL >> $LOGFILE
+					Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
+						$regex = [regex]"\<(.*)\>"
+						$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
+					}else{
+						$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
+						$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
+						if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
+						}
+					.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
+					Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+					$global:enable_SecureX = $false
+				}
+			}
+		}
 	}
 	Write-OutPut "====================================================================" >> $LOGFILE
 }
