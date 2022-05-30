@@ -2,6 +2,11 @@
 [![Minimum Supported PowerShell Version](https://img.shields.io/badge/PowerShell-5.1+-purple.svg)](https://github.com/PowerShell/PowerShell) ![Cross Platform](https://img.shields.io/badge/platform-windows-lightgrey)
 [![PowerShell Gallery Version](https://img.shields.io/powershellgallery/v/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan) [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan)
 
+UPDATE: Version 5.1.1 May 30, 2022
+
+- Optimize the module "CheckRedirectedURL", skip scan the URL if the URL contain file types in variable "$EXTENSIONARRAY" 
+
+
 UPDATE: Version 5.1.0 May 26, 2022
 
 - Add "RedirectURL.py" to replace the powershell script.
