@@ -104,7 +104,7 @@ function ESASpamQuarantine($Block_Sender, $Block_Recipient) {
 }
 
 $ESAUSERNAME = Get-Content .\init.conf | findstr ESAUSERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$ESACREDENTIAL = Get-Content .\init.conf | findstr ESACREDENTIAL |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$ESACREDENTIAL = Get-Content .\init.conf | findstr ESACREDENTIAL |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
 $ESAURL1 = Get-Content .\init.conf | findstr ESAURL1 |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $ESAURL2 = Get-Content .\init.conf | findstr ESAURL2 |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $HOST1 = $([System.Uri]$ESAURL1).Host
