@@ -1,10 +1,11 @@
+
 <#PSScriptInfo
 
 .VERSION 1.13
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
-.AUTHOR HAO BAN/hao.ban@ehealthsask.ca/banhao@gmail.com
+.AUTHOR HAO BAN/banhao@gmail.com
 
 .COMPANYNAME
 
@@ -25,6 +26,7 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <05/30/2022>
 
 .PRIVATEDATA
 
@@ -32,10 +34,7 @@
 
 .EXAMPLE
 
-.DESCRIPTION 
-	Creation Date:  <05/30/2022>
-	
-.Parameter
+.DESCRIPTION MineMeld_Indicator.ps1
 
 #> 
 
@@ -67,7 +66,7 @@ If( $Indicator:paramMissing -or  $Type:paramMissing ){
 
 $MineMeldServer = Get-Content .\init.conf | findstr MineMeldServer |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $MineMeldNode = Get-Content .\init.conf | findstr MineMeldNode |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
-$MINEMELDCREDENTIAL = Get-Content .\init.conf | findstr MINEMELDCREDENTIAL |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$MINEMELDCREDENTIAL = Get-Content .\init.conf | findstr MINEMELDCREDENTIAL |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
 $MineMeldApiUrl = $MineMeldServer + "/config/data/" + $MineMeldNode + "_indicators/append?h=" + $MineMeldNode + "&t=localdb"
 $HEADERS = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
 $HEADERS.Add("Authorization", "Basic $MINEMELDCREDENTIAL")
