@@ -17,7 +17,7 @@ url = "https://www.virustotal.com/api/v3/files"
 files={ "file": open(file,'rb') }
 headers = {"x-apikey": VIRUSTOTAL_API_KEY}
 response = requests.request("POST", url, headers=headers, files=files)
-time.sleep(15)
+time.sleep(60)
 ID = response.json()['data']['id']
 url = "https://www.virustotal.com/api/v3/analyses/"+ID
 headers = { "Accept": "application/json","x-apikey": VIRUSTOTAL_API_KEY }
