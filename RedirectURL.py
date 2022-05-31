@@ -3,24 +3,25 @@
 
 # Author: hao.ban@ehealthsask.ca//banhao@gmail.com
 # Version:
-# Issue Date: May 25, 2022
+# Issue Date: May 31, 2022
 # Release Note: 
 
 import sys, time, datetime, urllib.request
-from selenium import webdriver
+from msedge.selenium_tools import EdgeOptions
+from msedge.selenium_tools import Edge
 
 url = sys.argv[1]
+edge_options = EdgeOptions()
+edge_options.use_chromium = True
+edge_options.add_experimental_option('w3c', False)
+driver = Edge(executable_path=r'.\msedgedriver.exe', options=edge_options)
+time.sleep(1)
 try:
-    response_code = urllib.request.urlopen(url).getcode()
-except Exception:
-    sys.exc_info()
-    print(url, "is not accessible.")
-    response_code = 404
-
-if response_code == 200:
-    driver = webdriver.Edge(executable_path=r'.\msedgedriver.exe')
-    time.sleep(2)
     driver.get(url)
-    time.sleep(2)
+    time.sleep(3)
     print(driver.current_url)
-    driver.quit()
+except Exception:
+    MSG = sys.exc_info()[1]
+    if "ERR_NAME_NOT_RESOLVED" in MSG.msg:
+        print(url, "is not accessible.")
+driver.quit()
