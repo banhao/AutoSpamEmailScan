@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 5.1.1
+.VERSION 5.1.2
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <05/31/2022>
+	Purpose/Change: Rename some variables.
+	
 	Creation Date:  <05/30/2022>
 	Purpose/Change: Optimize the module "CheckRedirectedURL", skip scan the URL if the URL contain file types in variable "$EXTENSIONARRAY" 
 	
@@ -154,12 +157,12 @@ cls
 if ( [string]::IsNullOrEmpty($CREDENTIAL) -and [string]::IsNullOrEmpty($SALT) ){
 	$YorN = Read-Host "Do you want to input the Credential? [ y/n ] (Default is y)"
 	if ( $YorN -match "[yY]" -or ([string]::IsNullOrEmpty($YorN))){
-		$USERNAME = Get-Content .\init.conf | findstr USERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+		$USERNAME = Get-Content .\init.conf | findstr ADUSERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 		$CREDENTIAL = Get-Credential -credential $USERNAME
 		$PASSWORD = $CREDENTIAL.Password
 	}else{
-		$ENCODEDPASSWORD = Get-Content .\init.conf | findstr PASSWORD |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
-		$USERNAME = Get-Content .\init.conf | findstr USERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+		$ENCODEDPASSWORD = Get-Content .\init.conf | findstr ADPASSWORD |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
+		$USERNAME = Get-Content .\init.conf | findstr ADUSERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 		if ( [string]::IsNullOrEmpty($SALT) ){
 			$YorN = Read-Host "The salt is empty. Do you want to input the salt to decrypt the password? [ y/n ] (Default is y)"
 			if ( $YorN -match "[yY]" -or ([string]::IsNullOrEmpty($YorN))){
@@ -169,8 +172,8 @@ if ( [string]::IsNullOrEmpty($CREDENTIAL) -and [string]::IsNullOrEmpty($SALT) ){
 		}else { $PASSWORD = ([System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($ENCODEDPASSWORD))).Replace($SALT,"") }
 	}
 }else{
-	$ENCODEDPASSWORD = Get-Content .\init.conf | findstr PASSWORD |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
-	$USERNAME = Get-Content .\init.conf | findstr USERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+	$ENCODEDPASSWORD = Get-Content .\init.conf | findstr ADPASSWORD |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
+	$USERNAME = Get-Content .\init.conf | findstr ADUSERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 	if ( [string]::IsNullOrEmpty($SALT) ){
 		$YorN = Read-Host "The salt is empty. Do you want to input the salt to decrypt the password? [ y/n ] (Default is y)"
 		if ( $YorN -match "[yY]" -or ([string]::IsNullOrEmpty($YorN))){
