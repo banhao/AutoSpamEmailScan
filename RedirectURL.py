@@ -3,18 +3,22 @@
 
 # Author: hao.ban@ehealthsask.ca//banhao@gmail.com
 # Version:
-# Issue Date: May 31, 2022
+# Issue Date: June 02, 2022
 # Release Note: 
 
 import sys, time, datetime, urllib.request
-from msedge.selenium_tools import EdgeOptions
-from msedge.selenium_tools import Edge
+from selenium import webdriver
+from selenium.webdriver.edge.options import Options
+#from msedge.selenium_tools import EdgeOptions
+#from msedge.selenium_tools import Edge
 
 url = sys.argv[1]
-edge_options = EdgeOptions()
+edge_options = Options()
 edge_options.use_chromium = True
 edge_options.add_experimental_option('w3c', False)
-driver = Edge(executable_path=r'.\msedgedriver.exe', options=edge_options)
+edge_options.binary_location = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+#driver = Edge(executable_path=r'.\msedgedriver.exe', options=edge_options)
+driver = webdriver.Edge(options = edge_options)
 time.sleep(1)
 try:
     driver.get(url)
