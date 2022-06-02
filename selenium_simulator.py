@@ -3,7 +3,7 @@
 
 # Author: hao.ban@ehealthsask.ca//banhao@gmail.com
 # Version:
-# Issue Date: May 09, 2022
+# Issue Date: June 02, 2022
 # Release Note: 
 
 import sys, time, datetime
@@ -11,7 +11,8 @@ from selenium import webdriver
 
 url = sys.argv[1]
 log_file = sys.argv[2]
-driver = webdriver.Edge(executable_path=r'.\msedgedriver.exe')
+driver = webdriver.Edge()
+#driver = webdriver.Edge(executable_path=r'.\msedgedriver.exe')
 time.sleep(2)
 driver.get(url)
 time.sleep(5)
