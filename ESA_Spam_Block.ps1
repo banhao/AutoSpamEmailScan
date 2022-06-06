@@ -103,7 +103,7 @@ function ESASpamQuarantine($Block_Sender, $Block_Recipient) {
 	}
 }
 
-$ESAUSERNAME = Get-Content .\init.conf | findstr ESAUSERNAME |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
+$ESAUSER = Get-Content .\init.conf | findstr ESAUSER |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $ESACREDENTIAL = Get-Content .\init.conf | findstr ESACREDENTIAL |  %{ $_.Split(':')[1]; } | foreach{ $_.ToString().Trim() }
 $ESAURL1 = Get-Content .\init.conf | findstr ESAURL1 |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
 $ESAURL2 = Get-Content .\init.conf | findstr ESAURL2 |  %{ $_.Split('=')[1]; } | foreach{ $_.ToString().Trim() }
@@ -113,7 +113,7 @@ $PRIVATEKEY = Get-Content .\init.conf | findstr PRIVATEKEY |  %{ $_.Split('=')[1
 
 if ( (-not [string]::IsNullOrEmpty($Sender)) -and (ValidateEmailorDomain($Sender)) ){
 	$regex = [regex]".*\..*"
-	$RAT_DomainList = $(ssh -i ~/.ssh/id_rsa_esa $ESAUSERNAME@$HOST1 "clustermode cluster; listenerconfig EDIT InboundMail RCPTACCESS PRINT" | %{ $_.Split(' ')[0];} | %{ $regex.match($_) }).value | Where-Object {$_}
+	$RAT_DomainList = $(ssh -i ~/.ssh/id_rsa_esa $ESAUSER@$HOST1 "clustermode cluster; listenerconfig EDIT InboundMail RCPTACCESS PRINT" | %{ $_.Split(' ')[0];} | %{ $regex.match($_) }).value | Where-Object {$_}
 	
 	if ( [string]::IsNullOrEmpty($Recipient)){ 
 		$i = 1
@@ -154,6 +154,6 @@ if ( (-not [string]::IsNullOrEmpty($Sender)) -and (ValidateEmailorDomain($Sender
 			}
 		}
 	}
-	ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$HOST1 "slblconfig EXPORT"
-	ssh -i ~\.ssh\$PRIVATEKEY $ESAUSERNAME@$HOST2 "slblconfig EXPORT"
+	ssh -i ~\.ssh\$PRIVATEKEY $ESAUSER@$HOST1 "slblconfig EXPORT"
+	ssh -i ~\.ssh\$PRIVATEKEY $ESAUSER@$HOST2 "slblconfig EXPORT"
 }else{ Write-OutPut( "$Sender is not valid, it only can be an email address or a domain name (e.g.: user@domain.com, server.domain.com, domain.com)") }
