@@ -564,10 +564,10 @@ function MAIN {
 					$SCREENSHOTFILE = $REPORTSDIRECTORY+"screenshot_"+$RANDOMID+".jpg"
 					# output the results - first of all the From, Subject and Date Time Received
 					Write-OutPut "====================================================================" > $LOGFILE
-					Write-OutPut "From:    ",$($EMAIL.From) >> $LOGFILE
-					Write-OutPut "To:    ",$($EMAIL.ToRecipients) >> $LOGFILE
-					Write-OutPut "Subject: ",$($EMAIL.Subject) >> $LOGFILE
-					Write-OutPut "DateTimeReceived:    ",$($EMAIL.DateTimeReceived) >> $LOGFILE
+					Write-OutPut "From:    $($EMAIL.From)" >> $LOGFILE
+					Write-OutPut "To:    $($EMAIL.ToRecipients)" >> $LOGFILE
+					Write-OutPut "Subject:    $($EMAIL.Subject)" >> $LOGFILE
+					Write-OutPut "DateTimeReceived:    $($EMAIL.DateTimeReceived)" >> $LOGFILE
 					Write-OutPut "===================================================================="  >> $LOGFILE
 					$URLRegEx = '\b(?:(?:https?|ftp|file)://|www\.|ftp\.)(?:\([-A-Z0-9+&@#/%=~_|$?!:,.]*\)|[-A-Z0-9+&@#/%=~_|$?!:,.])*(?:\([-A-Z0-9+&@#/%=~_|$?!:,.]*\)|[A-Z0-9+&@#/%=~_|$])'
 					$URLLIST = $($EMAIL.Body.Text) | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
