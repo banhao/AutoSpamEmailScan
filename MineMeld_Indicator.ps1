@@ -124,7 +124,7 @@ if ( ($Type -eq "URL") -or ($Type -eq "domain") ){
 	}
 	foreach ($domain in $domain_list) { 
 		if ($domain -eq $DstDomain) { 
-			Write-OutPut "$($domain) ia added into OpenDNS Block List successfully." 
+			Write-OutPut "$($domain) is added into OpenDNS Block List successfully." 
 			break
 		}
 	}
