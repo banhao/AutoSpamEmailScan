@@ -310,10 +310,10 @@ function FromEmailAttachment {
 	$AdoDbStream.LoadFromFile($Args[0])
 	$global:CdoMessage = New-Object -ComObject CDO.Message
 	$CdoMessage.DataSource.OpenObject($AdoDbStream,"_Stream")
-	Write-OutPut "===From:    ",$($CdoMessage.From) >> $LOGFILE
-	Write-OutPut "===To:    ",$($CdoMessage.To) >> $LOGFILE
-	Write-OutPut "===Subject:    ",$($CdoMessage.Subject) >> $LOGFILE
-	Write-OutPut "===DateTimeReceived:    ",$($CdoMessage.SentOn) >> $LOGFILE
+	Write-OutPut "===From:    $($CdoMessage.From)" >> $LOGFILE
+	Write-OutPut "===To:    $($CdoMessage.To)" >> $LOGFILE
+	Write-OutPut "===Subject:    $($CdoMessage.Subject)" >> $LOGFILE
+	Write-OutPut "===DateTimeReceived:    $($CdoMessage.SentOn)" >> $LOGFILE
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 	$TextBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:textdescription").Value
 	$HTMLBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:htmldescription").Value
