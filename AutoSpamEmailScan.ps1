@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 5.1.2
+.VERSION 5.1.3
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <06/10/2022>
+	Purpose/Change: optimize some outputs format.
+	
 	Creation Date:  <05/31/2022>
 	Purpose/Change: Rename some variables.
 	
@@ -423,7 +426,6 @@ function ExtractURLFromPDFHTML {
 
 function CheckRedirectedURL {
 	if ( $URL -like '*safelinks.protection.outlook.com*' ) { $URL = [System.Web.HttpUtility]::ParseQueryString($(New-Object -TypeName System.Uri -ArgumentList $URL).Query)["url"] }
-	Write-Output "The Original URL is:" $URL >> $LOGFILE
 	$OriginalURL = $URL
 	$URLAccessible = & python RedirectURL.py $URL
 	if ($URLAccessible -match "is not accessible.") {
@@ -433,7 +435,7 @@ function CheckRedirectedURL {
 		if ($OriginalURL -eq $RedirectedURL) {
 			Write-OutPut "    |" >> $LOGFILE
 			Write-Output "    |--> The Redirected URL is: $($RedirectedURL)" >> $LOGFILE
-			if (! $EXTENSIONARRAY.contains($(($OriginalURL -split "/")[-1]).split(".")[-1])) {
+			if (! $EXTENSIONARRAY.contains($(([System.Uri]$URL).Host))) {
 				Submit-URL-Virustotal
 				Submit-URLSCAN
 				Google-Safe-Browsing
@@ -453,15 +455,17 @@ function CheckRedirectedURL {
 						$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
 						if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
 						}
-					.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
-					Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+					if ( ![string]::IsNullOrEmpty($Blocklist_Sender) ) {
+						.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
+						Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+					}
 					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 					$global:enable_SecureX = $false
 				}
 			}
 		}else{
 			$URL = $OriginalURL
-			if (! $EXTENSIONARRAY.contains($(($URL -split "/")[-1]).split(".")[-1])) {
+			if (! $EXTENSIONARRAY.contains($(([System.Uri]$URL).Host))) {
 				Submit-URL-Virustotal
 				Submit-URLSCAN
 				Google-Safe-Browsing
@@ -481,14 +485,16 @@ function CheckRedirectedURL {
 						$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
 						if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
 						}
-					.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
-					Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+					if ( ![string]::IsNullOrEmpty($Blocklist_Sender) ) {
+						.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
+						Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+					}
 					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 					$global:enable_SecureX = $false
 				}
 			}
 			$URL = $RedirectedURL
-			if (! $EXTENSIONARRAY.contains($(($URL -split "/")[-1]).split(".")[-1])) {
+			if (! $EXTENSIONARRAY.contains($(([System.Uri]$URL).Host))) {
 				Submit-URL-Virustotal
 				Submit-URLSCAN
 				Google-Safe-Browsing
@@ -508,8 +514,10 @@ function CheckRedirectedURL {
 						$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
 						if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
 						}
-					.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
-					Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+					if ( ![string]::IsNullOrEmpty($Blocklist_Sender) ) {
+						.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
+						Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
+					}
 					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 					$global:enable_SecureX = $false
 				}
