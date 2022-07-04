@@ -3,7 +3,7 @@
 
 # Author: hao.ban@ehealthsask.ca//banhao@gmail.com
 # Version:
-# Issue Date: May 26, 2022
+# Issue Date: July 04, 2022
 # Release Note: 
 
 
@@ -17,7 +17,7 @@ url = "https://www.virustotal.com/api/v3/files"
 files={ "file": open(file,'rb') }
 headers = {"x-apikey": VIRUSTOTAL_API_KEY}
 response = requests.request("POST", url, headers=headers, files=files)
-time.sleep(60)
+time.sleep(180)
 ID = response.json()['data']['id']
 url = "https://www.virustotal.com/api/v3/analyses/"+ID
 headers = { "Accept": "application/json","x-apikey": VIRUSTOTAL_API_KEY }
