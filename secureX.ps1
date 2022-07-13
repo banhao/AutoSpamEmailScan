@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.3
+.VERSION 1.4
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,7 +26,8 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
-	Creation Date:  <05/30/2022>
+	Creation Date:  <07/13/2022>
+	Purpose/Change: fix the bugs when "CONTENT" is a Domain, can't get the "URL" correct.
 
 .PRIVATEDATA
 
@@ -34,7 +35,7 @@
 
 .EXAMPLE
 
-.DESCRIPTION 
+.DESCRIPTION secureX.ps1
 
 #>
 
@@ -138,14 +139,16 @@ function SecureX-Investigation {
 								Accept = 'application/json'
 								Authorization = "Bearer $MDATP_token"
 								}
-					$RemoteUrl = $([URI]$CONTENT).host
+					if ( [string]::IsNullOrEmpty($(([URI]$CONTENT).host)) ) {
+						$RemoteUrl = $CONTENT
+					}else {	$RemoteUrl = $([URI]$CONTENT).host }
 					$query = @"
 DeviceNetworkEvents 
 | where RemoteUrl contains "$RemoteUrl" and InitiatingProcessAccountName == "$SamAccountName"
 "@
 					$body = ConvertTo-Json -InputObject @{ 'Query' = $query }
 					$response = Invoke-WebRequest -Method POST -Uri $url -Headers $headers -Body $body -ErrorAction Stop
-					if ( ![string]::IsNullOrEmpty(($response | ConvertFrom-Json).Results) ) {
+					if ( ![string]::IsNullOrEmpty($(($response | ConvertFrom-Json).Results)) ) {
 						$InitiatingProcessFileName = ($response | ConvertFrom-Json).Results.InitiatingProcessVersionInfoFileDescription
 						$Timestamp = ($response | ConvertFrom-Json).Results.Timestamp
 						$Recipient = $ADUser_Properties.DisplayName
@@ -158,12 +161,17 @@ Thanks,
 Enterprise Security Services
 eHealth Saskatechewan 
 "@
-						if ( $enable_alert -eq $true) { Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "emailsecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody }
-					} else { Write-OutPut "No related result is found in MDATP for $($ADUser_Properties.DisplayName)" }
+						if ( $enable_alert -eq $true) { 
+							Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "emailsecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
+							Write-OutPut "Alert Message has been sent to $($ADUser_Properties.DisplayName)"
+						}
+					} else { Write-OutPut "No related result was found in MDATP for $($ADUser_Properties.DisplayName)" }
 				}
 				if ( $endpoint -like '*(Anyconnect Roaming Client)' ) {
 					$endpoint_list += $($endpoint -split ' ', 0)[1].trimstart("'").trimend("'")
-					$RemoteUrl = $([URI]$CONTENT).host
+					if ( [string]::IsNullOrEmpty($(([URI]$CONTENT).host)) ) {
+						$RemoteUrl = $CONTENT
+					}else {	$RemoteUrl = $([URI]$CONTENT).host }
 					$HOSTNAME = $($endpoint -split ' ', 0)[1].trimstart("'").trimend("'")
 					$url = "https://api.securitycenter.microsoft.com/api/advancedqueries/run"
 					MDATP_authentication
@@ -187,7 +195,7 @@ DeviceNetworkEvents
 "@
 					$body = ConvertTo-Json -InputObject @{ 'Query' = $query }
 					$response = Invoke-WebRequest -Method POST -Uri $url -Headers $headers -Body $body -ErrorAction Stop
-					if ( ![string]::IsNullOrEmpty(($response | ConvertFrom-Json).Results) ) {
+					if ( ![string]::IsNullOrEmpty($(($response | ConvertFrom-Json).Results)) ) {
 						$UserPrincipalName = ($response | ConvertFrom-Json).Results.InitiatingProcessAccountUpn
 						$InitiatingProcessFileName = ($response | ConvertFrom-Json).Results.InitiatingProcessVersionInfoFileDescription
 						$Timestamp = ($response | ConvertFrom-Json).Results.Timestamp
@@ -205,8 +213,11 @@ Thanks,
 Enterprise Security Services
 eHealth Saskatechewan 
 "@
-						if ( $enable_alert -eq $true) { Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "emailsecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody }
-					} else { Write-OutPut "No related result is found in MDATP for $($HOSTNAME)" }
+						if ( $enable_alert -eq $true) { 
+							Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "emailsecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
+							Write-OutPut "Alert Message has been sent to $($HOSTNAME)"
+						}
+					} else { Write-OutPut "No related result was found in MDATP for $($HOSTNAME)" }
 				}	
 			}
 			Write-OutPut ""
