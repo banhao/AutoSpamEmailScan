@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 5.1.3
+.VERSION 5.1.4
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <08/17/2022>
+	Purpose/Change: Add module "extract_hyperlink_from_Excel"
+	
 	Creation Date:  <06/10/2022>
 	Purpose/Change: optimize some outputs format.
 	
@@ -441,7 +444,7 @@ function CheckRedirectedURL {
 				Google-Safe-Browsing
 				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"  >> $LOGFILE
 				if ( $global:enable_SecureX ) {
-					.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported" >> $LOGFILE
+					.\MineMeld_Indicator.ps1 $URL URL -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
 					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
 					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 					.\secureX.ps1 $URL >> $LOGFILE
@@ -471,7 +474,7 @@ function CheckRedirectedURL {
 				Google-Safe-Browsing
 				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"  >> $LOGFILE
 				if ( $global:enable_SecureX ) {
-					.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported" >> $LOGFILE
+					.\MineMeld_Indicator.ps1 $URL URL -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
 					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
 					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 					.\secureX.ps1 $URL >> $LOGFILE
@@ -500,7 +503,7 @@ function CheckRedirectedURL {
 				Google-Safe-Browsing
 				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"  >> $LOGFILE
 				if ( $global:enable_SecureX ) {
-					.\MineMeld_Indicator.ps1 $URL URL -comment "User Reported" >> $LOGFILE
+					.\MineMeld_Indicator.ps1 $URL URL -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
 					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
 					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 					.\secureX.ps1 $URL >> $LOGFILE
@@ -525,6 +528,40 @@ function CheckRedirectedURL {
 		}
 	}
 	Write-OutPut "====================================================================" >> $LOGFILE
+}
+
+function extract_hyperlink_from_Excel {
+	$URLLIST = @()
+	$excel = New-Object -ComObject excel.application
+	$excel.visible = $False
+	$workbook = $excel.Workbooks.Open($ATTFILENAME)
+	$workbook.saveas($DOWNLOADDIRECTORY+'temp',44)
+ 	#Looping the Workbook sheet to check all the sheets in the Excel
+	for ($loop_index = 1; $loop_index -le $workbook.Sheets.Count; $loop_index++)
+	{
+	#Assigining the hyperlinks to the Variable from each sheet
+		$Sheet = $workbook.Worksheets($loop_index).Hyperlinks
+	#looping the Sheet one by one and store it in collection
+		$Sheet | ForEach-Object{ 
+			$Link = $_.Address
+			$URLLIST = $URLLIST += $Link
+		}
+	}
+	#Kill the excel
+	$workbook.close()
+	Stop-Process -name excel
+	Remove-Item -Path "$($DOWNLOADDIRECTORY)temp.*"
+	Remove-Item -Force -Recurse -Path "$($DOWNLOADDIRECTORY)temp_files"
+	$URLARRAY = @()
+	foreach ($URL in $URLLIST){ if ( $URL -notin $EXPLIST ){$URLARRAY = $URLARRAY += $URL }}
+	# URL is not null or empty do check the URL
+	if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
+		foreach($URL in $URLARRAY){
+			Write-OutPut "URL:     ",$URL >> $LOGFILE
+			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+			CheckRedirectedURL
+		}
+	}
 }
 
 function MAIN {
@@ -623,6 +660,9 @@ function MAIN {
 									if ( ($EXTENSION -eq ".eml") -or ($EXTENSION -eq ".raw") ){
 										FromEmailAttachment $ATTFILENAME
 									} else{
+											if ( ($EXTENSION -eq ".xlsx") -or ($EXTENSION -eq ".xlsm") -or ($EXTENSION -eq ".xls") -or ($EXTENSION -eq ".xlsb") -or ($EXTENSION -eq ".xltx") -or ($EXTENSION -eq ".xltm") -or ($EXTENSION -eq ".xlt") -or ($EXTENSION -eq ".xla") -or ($EXTENSION -eq ".xlam") -or ($EXTENSION -eq ".xlsm") ){
+												extract_hyperlink_from_Excel
+											}	
 											if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
 												Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
 												python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
