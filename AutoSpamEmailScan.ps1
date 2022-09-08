@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 5.1.4
+.VERSION 5.1.5
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <09/09/2022>
+	Purpose/Change: Add module "Base64Decode"
+	
 	Creation Date:  <08/17/2022>
 	Purpose/Change: Add module "extract_hyperlink_from_Excel"
 	
@@ -368,6 +371,9 @@ function FromEmailAttachment {
 						ExtractURLFromPDFHTML
 						Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
 						python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
+						if ( ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
+							Base64Decode
+						}
 					}else {
 						if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
 							Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
@@ -564,6 +570,26 @@ function extract_hyperlink_from_Excel {
 	}
 }
 
+function Base64Decode {
+	$HTMLCONTENT = Get-Content($FILEPATH)
+	$FILENAME = Split-Path $FILEPATH -leaf
+	if ( $HTMLCONTENT -like "*atob('*')*" ){
+		Write-OutPut "=====================HTML FILE IS BASE64 ENCODED=====================" >> $LOGFILE
+		$PATTERN = "'.*'"
+		$ENCODEHTML = $($([regex]::Matches($HTMLCONTENT, $PATTERN).value) -replace "'","")
+		$DECODEHTML = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($ENCODEHTML))
+		$ATTFILENAME = $DOWNLOADDIRECTORY + "DECODE_" + $FILENAME
+		$DECODEHTML | Out-File -FilePath $ATTFILENAME
+		Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
+		python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+		Submit-FILE-OPSWAT
+		Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
+		ExtractURLFromPDFHTML
+		Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
+		python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
+	}
+}
+
 function MAIN {
 	date
 	If(!(test-path $DOWNLOADDIRECTORY)){ New-Item -ItemType directory -Path $DOWNLOADDIRECTORY }
@@ -671,6 +697,9 @@ function MAIN {
 												ExtractURLFromPDFHTML
 												Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
 												python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
+												if ( ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
+													Base64Decode
+												}
 											}else {
 												if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
 													python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
