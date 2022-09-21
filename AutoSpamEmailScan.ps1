@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 5.1.5
+.VERSION 5.1.6
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,6 +26,9 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <09/21/2022>
+	Purpose/Change: Add Hash Value into MineMeld when the attachment scan result is positive
+	
 	Creation Date:  <09/09/2022>
 	Purpose/Change: Add module "Base64Decode"
 	
@@ -366,6 +369,12 @@ function FromEmailAttachment {
 					if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
 						Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
 						python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+						$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
+						if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
+							.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
+							Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
+							Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+						}
 						Submit-FILE-OPSWAT
 						Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
 						ExtractURLFromPDFHTML
@@ -378,6 +387,12 @@ function FromEmailAttachment {
 						if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
 							Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
 							python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+							$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
+							if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
+								.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
+								Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
+								Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+							}
 							Submit-FILE-OPSWAT
 						}
 					}
@@ -582,6 +597,12 @@ function Base64Decode {
 		$DECODEHTML | Out-File -FilePath $ATTFILENAME
 		Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
 		python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+		$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
+		if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
+			.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE 
+			Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
+			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+		}
 		Submit-FILE-OPSWAT
 		Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
 		ExtractURLFromPDFHTML
@@ -692,6 +713,12 @@ function MAIN {
 											if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
 												Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
 												python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+												$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
+												if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
+													.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE 
+													Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
+													Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE												
+												}
 												Submit-FILE-OPSWAT
 												Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
 												ExtractURLFromPDFHTML
@@ -703,6 +730,12 @@ function MAIN {
 											}else {
 												if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
 													python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+													$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
+													if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
+														.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
+														Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
+														Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+													}
 													Submit-FILE-OPSWAT
 												}
 												}
