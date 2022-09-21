@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.4
+.VERSION 1.4.1
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,8 +26,8 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
-	Creation Date:  <07/13/2022>
-	Purpose/Change: fix the bugs when "CONTENT" is a Domain, can't get the "URL" correct.
+	Creation Date:  <09/20/2022>
+	Purpose/Change: Add some outputs.
 
 .PRIVATEDATA
 
@@ -149,6 +149,7 @@ DeviceNetworkEvents
 					$body = ConvertTo-Json -InputObject @{ 'Query' = $query }
 					$response = Invoke-WebRequest -Method POST -Uri $url -Headers $headers -Body $body -ErrorAction Stop
 					if ( ![string]::IsNullOrEmpty($(($response | ConvertFrom-Json).Results)) ) {
+						Write-OutPut "MDATP found the User $($ADUser_Properties.DisplayName) tried to access the URL"
 						$InitiatingProcessFileName = ($response | ConvertFrom-Json).Results.InitiatingProcessVersionInfoFileDescription
 						$Timestamp = ($response | ConvertFrom-Json).Results.Timestamp
 						$Recipient = $ADUser_Properties.DisplayName
@@ -162,7 +163,7 @@ Enterprise Security Services
 eHealth Saskatechewan 
 "@
 						if ( $enable_alert -eq $true) { 
-							Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "emailsecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
+							Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -Cc "ehssecurity@ehealthsask.ca" -From "emailsecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
 							Write-OutPut "Alert Message has been sent to $($ADUser_Properties.DisplayName)"
 						}
 					} else { Write-OutPut "No related result was found in MDATP for $($ADUser_Properties.DisplayName)" }
@@ -196,6 +197,7 @@ DeviceNetworkEvents
 					$body = ConvertTo-Json -InputObject @{ 'Query' = $query }
 					$response = Invoke-WebRequest -Method POST -Uri $url -Headers $headers -Body $body -ErrorAction Stop
 					if ( ![string]::IsNullOrEmpty($(($response | ConvertFrom-Json).Results)) ) {
+						Write-OutPut "MDATP found the Endpoint $($HOSTNAME) tried to access the URL"
 						$UserPrincipalName = ($response | ConvertFrom-Json).Results.InitiatingProcessAccountUpn
 						$InitiatingProcessFileName = ($response | ConvertFrom-Json).Results.InitiatingProcessVersionInfoFileDescription
 						$Timestamp = ($response | ConvertFrom-Json).Results.Timestamp
@@ -214,7 +216,7 @@ Enterprise Security Services
 eHealth Saskatechewan 
 "@
 						if ( $enable_alert -eq $true) { 
-							Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "emailsecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
+							Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -Cc "ehssecurity@ehealthsask.ca" -From "emailsecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
 							Write-OutPut "Alert Message has been sent to $($HOSTNAME)"
 						}
 					} else { Write-OutPut "No related result was found in MDATP for $($HOSTNAME)" }
