@@ -2,6 +2,10 @@
 [![Minimum Supported PowerShell Version](https://img.shields.io/badge/PowerShell-5.1+-purple.svg)](https://github.com/PowerShell/PowerShell) ![Cross Platform](https://img.shields.io/badge/platform-windows-lightgrey)
 [![PowerShell Gallery Version](https://img.shields.io/powershellgallery/v/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan) [![PowerShell Gallery](https://img.shields.io/powershellgallery/dt/AutoSpamEmailScan)](https://www.powershellgallery.com/packages/AutoSpamEmailScan)
 
+UPDATE: Version 5.2.0 November 08, 2022
+
+- Remove module "EncodedHTML". Add BANNER. Add module check.
+
 
 UPDATE: Version 5.1.6 September 21, 2022
 
