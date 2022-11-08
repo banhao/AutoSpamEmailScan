@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 1.4.1
+.VERSION 1.4.2
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,8 +26,8 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
-	Creation Date:  <09/20/2022>
-	Purpose/Change: Add some outputs.
+	Creation Date:  <11/08/2022>
+	Purpose/Change: 
 
 .PRIVATEDATA
 
@@ -132,6 +132,7 @@ function SecureX-Investigation {
 #					Write-OutPut "$($GivenName) $($Surname), $($fRegion_DomainName)"
 					$ADUser_Properties = Get-ADUser -Filter 'GivenName -eq $GivenName -and Surname -eq $Surname' -Server $(Get-ADDomainController -DomainName $fRegion_DomainName -Discover -NextClosestSite).Name -properties *
 					$SamAccountName = $ADUser_Properties.SamAccountName.ToLower()
+					$Recipient = $ADUser_Properties.DisplayName
 					$url = "https://api.securitycenter.microsoft.com/api/advancedqueries/run"
 					MDATP_authentication
 					$headers = @{
@@ -139,23 +140,19 @@ function SecureX-Investigation {
 								Accept = 'application/json'
 								Authorization = "Bearer $MDATP_token"
 								}
-					if ( [string]::IsNullOrEmpty($(([URI]$CONTENT).host)) ) {
-						$RemoteUrl = $CONTENT
-					}else {	$RemoteUrl = $([URI]$CONTENT).host }
 					$query = @"
 DeviceNetworkEvents 
-| where RemoteUrl contains "$RemoteUrl" and InitiatingProcessAccountName == "$SamAccountName"
+| where RemoteUrl contains "$CONTENT" and InitiatingProcessAccountName == "$SamAccountName"
 "@
 					$body = ConvertTo-Json -InputObject @{ 'Query' = $query }
 					$response = Invoke-WebRequest -Method POST -Uri $url -Headers $headers -Body $body -ErrorAction Stop
 					if ( ![string]::IsNullOrEmpty($(($response | ConvertFrom-Json).Results)) ) {
-						Write-OutPut "MDATP found the User $($ADUser_Properties.DisplayName) tried to access the URL"
+						Write-OutPut "MDATP found the User $($Recipient) tried to access the URL"
 						$InitiatingProcessFileName = ($response | ConvertFrom-Json).Results.InitiatingProcessVersionInfoFileDescription
 						$Timestamp = ($response | ConvertFrom-Json).Results.Timestamp
-						$Recipient = $ADUser_Properties.DisplayName
 						$EmailBody = @"
 Hello $Recipient,
-Our security system detected you used $InitiatingProcessFileName to access [$RemoteUrl] at $Timestamp which is a Malicious/Phishing site. Please contact the Service Desk and change you AD account password immediately.
+Our security system detected you used $InitiatingProcessFileName to access [$CONTENT] at $Timestamp which is a Malicious/Phishing site. Please contact the Service Desk and change you AD account password immediately.
 If you have any questions, please contact ehssecurity@ehealthsask.ca
 
 Thanks,
@@ -163,16 +160,15 @@ Enterprise Security Services
 eHealth Saskatechewan 
 "@
 						if ( $enable_alert -eq $true) { 
-							Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -Cc "ehssecurity@ehealthsask.ca" -From "emailsecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
-							Write-OutPut "Alert Message has been sent to $($ADUser_Properties.DisplayName)"
+							if ( ![string]::IsNullOrEmpty($ADUser_Properties.EmailAddress) ) {
+								Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "emailsecurity@ehealthsask.ca" -Cc "ehssecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
+								Write-OutPut "Alert Message has been sent to $($Recipient)"
+							}else{ Write-OutPut "$($Recipient) Email Address is not exist." }	
 						}
-					} else { Write-OutPut "No related result was found in MDATP for $($ADUser_Properties.DisplayName)" }
+					} else { Write-OutPut "No related result was found in MDATP for $($Recipient)" }
 				}
 				if ( $endpoint -like '*(Anyconnect Roaming Client)' ) {
 					$endpoint_list += $($endpoint -split ' ', 0)[1].trimstart("'").trimend("'")
-					if ( [string]::IsNullOrEmpty($(([URI]$CONTENT).host)) ) {
-						$RemoteUrl = $CONTENT
-					}else {	$RemoteUrl = $([URI]$CONTENT).host }
 					$HOSTNAME = $($endpoint -split ' ', 0)[1].trimstart("'").trimend("'")
 					$url = "https://api.securitycenter.microsoft.com/api/advancedqueries/run"
 					MDATP_authentication
@@ -191,7 +187,7 @@ DeviceInfo
 					$DeviceId = ($response | ConvertFrom-Json).Results.DeviceId
 					$query = @"
 DeviceNetworkEvents 
-| where DeviceId == "$DeviceId" and RemoteUrl contains "$RemoteUrl"
+| where DeviceId == "$DeviceId" and RemoteUrl contains "$CONTENT"
 | where Timestamp > ago(30d)		
 "@
 					$body = ConvertTo-Json -InputObject @{ 'Query' = $query }
@@ -199,6 +195,9 @@ DeviceNetworkEvents
 					if ( ![string]::IsNullOrEmpty($(($response | ConvertFrom-Json).Results)) ) {
 						Write-OutPut "MDATP found the Endpoint $($HOSTNAME) tried to access the URL"
 						$UserPrincipalName = ($response | ConvertFrom-Json).Results.InitiatingProcessAccountUpn
+						if ( !([string]::IsNullOrEmpty($UserPrincipalName) -or [string]::IsNullOrWhiteSpace($UserPrincipalName)) ) {
+							$UserPrincipalName = ($response | ConvertFrom-Json).Results.InitiatingProcessAccountName
+						}
 						$InitiatingProcessFileName = ($response | ConvertFrom-Json).Results.InitiatingProcessVersionInfoFileDescription
 						$Timestamp = ($response | ConvertFrom-Json).Results.Timestamp
 						$computerDnsName = ($response | ConvertFrom-Json).Results.DeviceName
@@ -208,7 +207,7 @@ DeviceNetworkEvents
 						$Recipient = $ADUser_Properties.DisplayName
 						$EmailBody = @"
 Hello $Recipient,
-Our security system detected you used $InitiatingProcessFileName to access [$RemoteUrl] at $Timestamp which is a Malicious/Phishing site. Please contact the Service Desk and change you AD account password immediately.
+Our security system detected you used $InitiatingProcessFileName to access [$CONTENT] at $Timestamp which is a Malicious/Phishing site. Please contact the Service Desk and change you AD account password immediately.
 If you have any questions, please contact ehssecurity@ehealthsask.ca
 
 Thanks,
@@ -216,10 +215,12 @@ Enterprise Security Services
 eHealth Saskatechewan 
 "@
 						if ( $enable_alert -eq $true) { 
-							Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -Cc "ehssecurity@ehealthsask.ca" -From "emailsecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
-							Write-OutPut "Alert Message has been sent to $($HOSTNAME)"
+							if ( ![string]::IsNullOrEmpty($ADUser_Properties.EmailAddress) ) {
+								Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "emailsecurity@ehealthsask.ca" -Cc "ehssecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
+								Write-OutPut "Alert Message has been sent to $($HOSTNAME)"
+							}else{ Write-OutPut "$($Recipient) Email Address is not exist." }
 						}
-					} else { Write-OutPut "No related result was found in MDATP for $($HOSTNAME)" }
+					} else { Write-OutPut "No related result was found in MDATP for HOST $($HOSTNAME)" }
 				}	
 			}
 			Write-OutPut ""
