@@ -1,7 +1,7 @@
 
 <#PSScriptInfo
 
-.VERSION 5.1.6
+.VERSION 5.2.0
 
 .GUID 134de175-8fd8-4938-9812-053ba39eed83
 
@@ -26,11 +26,14 @@
 .EXTERNALSCRIPTDEPENDENCIES
 
 .RELEASENOTES
+	Creation Date:  <11/08/2022>
+	Purpose/Change: Remove module "EncodedHTML". Add BANNER. Add module check.
+	
 	Creation Date:  <09/21/2022>
 	Purpose/Change: Add Hash Value into MineMeld when the attachment scan result is positive
 	
 	Creation Date:  <09/09/2022>
-	Purpose/Change: Add module "Base64Decode"
+	Purpose/Change: Add module "EncodedHTML"
 	
 	Creation Date:  <08/17/2022>
 	Purpose/Change: Add module "extract_hyperlink_from_Excel"
@@ -165,6 +168,72 @@
 #variables
 param ($CREDENTIAL,$SALT)
 cls
+$BANNER = @"
+
+    #                            #####                          #######                            #####                       
+   # #   #    # #####  ####     #     # #####    ##   #    #    #       #    #   ##   # #         #     #  ####    ##   #    # 
+  #   #  #    #   #   #    #    #       #    #  #  #  ##  ##    #       ##  ##  #  #  # #         #       #    #  #  #  ##   # 
+ #     # #    #   #   #    #     #####  #    # #    # # ## #    #####   # ## # #    # # #          #####  #      #    # # #  # 
+ ####### #    #   #   #    #          # #####  ###### #    #    #       #    # ###### # #               # #      ###### #  # # 
+ #     # #    #   #   #    #    #     # #      #    # #    #    #       #    # #    # # #         #     # #    # #    # #   ## 
+ #     #  ####    #    ####      #####  #      #    # #    #    ####### #    # #    # # ######     #####   ####  #    # #    # 
+
+    Copyright © Hao Ban - 2022
+    Issue Date: November 07, 2022
+    Version: 5.2.0
+    Author: Hao Ban <banhao@gmail.com>
+"@
+Write-Host $BANNER `r`n
+
+$ALLPYTHONMODULEOFF = $false
+$PYTHONVERSION = &{python -V} 2>&1
+
+if($PYTHONVERSION -is [System.Management.Automation.ErrorRecord]) {
+	$PYTHONVERSION.Exception.Message
+	Write-Host "***** CAN NOT FIND PYTHON ENVIRONMENT. *****" -ForegroundColor red `r`n
+	Write-Host "***** All THE PYTHON MODULES WILL BE DISABLED. *****" -ForegroundColor red `r`n
+	$ALLPYTHONMODULEOFF = $true
+}else {
+    if ([System.Version]$PYTHONVERSION.split("")[1] -lt [System.Version]"3.6.0") {
+		Write-Host "***** THE PYTHON VERSION DOES NOT MATCH THE MINIMUM REQUIREMENT. *****" -ForegroundColor red `r`n
+		Write-Host "***** All THE PYTHON MODULES WILL BE DISABLED. *****" -ForegroundColor red `r`n
+		$ALLPYTHONMODULEOFF = $true
+	}
+}
+
+$global:MODULE_LIST = New-Object System.Collections.Generic.Dictionary"[String,String]"
+$MODULES = $(Select-Xml -Path .\module.xml -XPath "//SETTINGS/MODULE" | foreach {$_.node}).'#text'
+$xmlSETTINGS = [xml](Get-Content -Path .\module.xml)
+foreach ($module in $MODULES){
+	if ( $module.trim() -like "*.py" -and $ALLPYTHONMODULEOFF ) {
+		$global:MODULE_LIST.add($($module.trim()), "OFF")
+		Write-Host "##### [$($module.trim())] is turned" -NoNewline
+		Write-Host " [OFF] " -ForegroundColor red -NoNewline
+		Write-Host "#####" `r
+		$COMMENT = $($xmlSETTINGS.SelectNodes("//SETTINGS/MODULE[contains(.,'$module')]/COMMENT").'#text').Trim()
+		Write-Host "      |-$COMMENT" `r`n
+		
+	}else {	
+		if ( Test-Path -path ".\$($module.trim())" ){
+			$ONOFF = $($xmlSETTINGS.SelectNodes("//SETTINGS/MODULE[contains(.,'$module')]/ENABLE").'#text').Trim()
+			$global:MODULE_LIST.add($($module.trim()), $ONOFF)
+			if ( $ONOFF -eq "OFF" ) {
+				Write-Host "##### [$($module.trim())] is in the current folder and is turned" -NoNewline
+				Write-Host " [$ONOFF] " -ForegroundColor red -NoNewline
+				Write-Host "#####" `r
+				$COMMENT = $($xmlSETTINGS.SelectNodes("//SETTINGS/MODULE[contains(.,'$module')]/COMMENT").'#text').Trim()
+				Write-Host "      |-$COMMENT" `r`n
+			}else{
+				Write-Host "##### [$($module.trim())] is in the current folder and is turned [$ONOFF]  #####" `r`n -ForegroundColor green
+			}
+		}else{
+			$global:MODULE_LIST.add($($module.trim()), "OFF")
+			Write-Host "***** CANNOT FIND [$($module.trim())] IN THE CURRENT FOLDER, SO THE FEATURE WILL BE DISABLED. *****" -ForegroundColor red `r
+			$COMMENT = $($xmlSETTINGS.SelectNodes("//SETTINGS/MODULE[contains(.,'$module')]/COMMENT").'#text').Trim()
+			Write-Host "      |-$COMMENT" `r`n
+		}
+	}
+}
 
 if ( [string]::IsNullOrEmpty($CREDENTIAL) -and [string]::IsNullOrEmpty($SALT) ){
 	$YorN = Read-Host "Do you want to input the Credential? [ y/n ] (Default is y)"
@@ -321,14 +390,14 @@ function FromEmailAttachment {
 	$AdoDbStream.Open()
 	$AdoDbStream.LoadFromFile($Args[0])
 	$global:CdoMessage = New-Object -ComObject CDO.Message
-	$CdoMessage.DataSource.OpenObject($AdoDbStream,"_Stream")
-	Write-OutPut "===From:    $($CdoMessage.From)" >> $LOGFILE
-	Write-OutPut "===To:    $($CdoMessage.To)" >> $LOGFILE
-	Write-OutPut "===Subject:    $($CdoMessage.Subject)" >> $LOGFILE
-	Write-OutPut "===DateTimeReceived:    $($CdoMessage.SentOn)" >> $LOGFILE
+	$global:CdoMessage.DataSource.OpenObject($AdoDbStream,"_Stream")
+	Write-OutPut "===From:    $($global:CdoMessage.From)" >> $LOGFILE
+	Write-OutPut "===To:    $($global:CdoMessage.To)" >> $LOGFILE
+	Write-OutPut "===Subject:    $($global:CdoMessage.Subject)" >> $LOGFILE
+	Write-OutPut "===DateTimeReceived:    $($global:CdoMessage.SentOn)" >> $LOGFILE
 	Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-	$TextBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:textdescription").Value
-	$HTMLBody = $CdoMessage.Fields.Item("urn:schemas:httpmail:htmldescription").Value
+	$TextBody = $global:CdoMessage.Fields.Item("urn:schemas:httpmail:textdescription").Value
+	$HTMLBody = $global:CdoMessage.Fields.Item("urn:schemas:httpmail:htmldescription").Value
 	$EmailBODY = $TextBody + $HTMLBody + $EMLData
 	$URLLIST = $EmailBODY | select-string -pattern $URLRegEx -AllMatches  | %{ $_.Matches } | %{ $_.Value } | Sort-Object | ? {$EXEMPTURL -notcontains $_} | Get-Unique
 	$EXPLIST = $EXEMPTURL | foreach-object { $URLLIST -match $_ }
@@ -337,14 +406,13 @@ function FromEmailAttachment {
 	if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
 		foreach($URL in $URLARRAY){
 			Write-OutPut "URL:     ",$URL >> $LOGFILE
-			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 			CheckRedirectedURL
 		}
 	}
-	$BOUNDARY = $CdoMessage.Fields.Item("urn:schemas:mailheader:content-type").Value | %{ $_.Split(';')[1]; } | %{ $_.Split('"')[1]; }
-	for ($i=1;$i -le $CdoMessage.Attachments.count;$i++){
-		$ContentMediaType = $CdoMessage.Attachments.Item($i).ContentMediaType
-		$FILENAME = $CdoMessage.Attachments.Item($i).FileName
+	$BOUNDARY = $global:CdoMessage.Fields.Item("urn:schemas:mailheader:content-type").Value | %{ $_.Split(';')[1]; } | %{ $_.Split('"')[1]; }
+	for ($i=1;$i -le $global:CdoMessage.Attachments.count;$i++){
+		$ContentMediaType = $global:CdoMessage.Attachments.Item($i).ContentMediaType
+		$FILENAME = $global:CdoMessage.Attachments.Item($i).FileName
 		$AttachmentPATTERN = """$FILENAME""(.*?)  --$BOUNDARY"
 		$ATTACHDATA = [regex]::match($EMLData, $AttachmentPATTERN).Groups[1].Value
 		if ( -not [string]::IsNullOrEmpty($FILENAME) ){
@@ -367,31 +435,48 @@ function FromEmailAttachment {
 					Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
 					$EXTENSION = [System.IO.Path]::GetExtension($ATTFILENAME)
 					if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
-						Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
-						python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
-						$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
-						if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
-							.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
-							Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
-							Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-						}
-						Submit-FILE-OPSWAT
-						Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
-						ExtractURLFromPDFHTML
-						Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
-						python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
-						if ( ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
-							Base64Decode
-						}
-					}else {
-						if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
+						if ( $global:MODULE_LIST.'Submit_FILE_Virustotal.py' -eq "ON" ) {
 							Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
 							python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
 							$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
 							if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
-								.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
-								Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
-								Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+								if ( $global:MODULE_LIST.'MineMeld_Indicator.ps1' -eq "ON" ) {
+									.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
+									Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
+									Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+								}
+							}
+						}
+						Submit-FILE-OPSWAT
+						Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
+						ExtractURLFromPDFHTML
+						if ( $global:MODULE_LIST.'selenium_simulator.py' -eq "ON" ) {
+							Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
+							python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
+						}
+						if ( ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
+							$HTMLCONTENT = Get-Content($FILEPATH)
+							if ( ($HTMLCONTENT -like "*atob('*')*")  -or ($HTMLCONTENT -like "*document.write(unescape('*')*") -or ($HTMLCONTENT -like "*base64*") -or ($HTMLCONTENT -like "*\u00*") ){
+								Write-OutPut "********************************************************************" >> $LOGFILE
+								Write-OutPut "*                                                                  *" >> $LOGFILE
+								Write-OutPut "*         HTML FILE IS ENCODED AND IT IS HIGHLY SUSPICIOUS         *" >> $LOGFILE
+								Write-OutPut "*                                                                  *" >> $LOGFILE
+								Write-OutPut "********************************************************************" >> $LOGFILE
+							}
+						}
+					}else {
+						if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
+							if ( $global:MODULE_LIST.'Submit_FILE_Virustotal.py' -eq "ON" ) {
+								Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
+								python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+								$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
+								if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
+									if ( $global:MODULE_LIST.'MineMeld_Indicator.ps1' -eq "ON" ) {
+										.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
+										Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
+										Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+									}
+								}
 							}
 							Submit-FILE-OPSWAT
 						}
@@ -423,7 +508,9 @@ function ConvertLogToHTML {
 
 function ExtractURLFromPDFHTML {
 	if ( $EXTENSION -eq ".pdf" ){
-		$URLArrayFromPDF = & python pdf2url.py $ATTFILENAME
+		if ( $global:MODULE_LIST.'pdf2url.py' -eq "ON" ) {
+			$URLArrayFromPDF = & python pdf2url.py $ATTFILENAME
+		}
 	}else{
 		$HTMLFILE = $ATTFILENAME
 		$URLArrayFromHTML = Get-Content $HTMLFILE | select-string -pattern $URLRegEx -AllMatches | %{ $_.Matches } | %{ $_.Value } | Sort-Object | Get-Unique
@@ -442,7 +529,6 @@ function ExtractURLFromPDFHTML {
 	if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
 		foreach($URL in $URLARRAY){
 			Write-OutPut "URL:     ",$URL >> $LOGFILE
-			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 			CheckRedirectedURL
 			}
 	}else{ Write-OutPut "=====================No URL in the PDF/HTML file needs to scan=====================" >> $LOGFILE }
@@ -450,101 +536,50 @@ function ExtractURLFromPDFHTML {
 
 function CheckRedirectedURL {
 	if ( $URL -like '*safelinks.protection.outlook.com*' ) { $URL = [System.Web.HttpUtility]::ParseQueryString($(New-Object -TypeName System.Uri -ArgumentList $URL).Query)["url"] }
-	$OriginalURL = $URL
-	$URLAccessible = & python RedirectURL.py $URL
+	if ($global:MODULE_LIST.'RedirectURL.py' -eq "ON") {
+		$URLAccessible = & python RedirectURL.py $URL
+	}else{
+		$URLAccessible = $URL
+	}
 	if ($URLAccessible -match "is not accessible.") {
 		Write-OutPut "$($URL) is not accessible." >> $LOGFILE
 	}else{
-		$RedirectedURL = $URLAccessible
-		if ($OriginalURL -eq $RedirectedURL) {
-			Write-OutPut "    |" >> $LOGFILE
-			Write-Output "    |--> The Redirected URL is: $($RedirectedURL)" >> $LOGFILE
-			if (! $EXTENSIONARRAY.contains($(([System.Uri]$URL).Host))) {
-				Submit-URL-Virustotal
-				Submit-URLSCAN
-				Google-Safe-Browsing
-				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"  >> $LOGFILE
-				if ( $global:enable_SecureX ) {
-					.\MineMeld_Indicator.ps1 $URL URL -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
-					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
-					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-					.\secureX.ps1 $URL >> $LOGFILE
-					Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
-					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-					if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
-						$regex = [regex]"\<(.*)\>"
-						$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
-					}else{
-						$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
-						$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
-						if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
-						}
-					if ( ![string]::IsNullOrEmpty($Blocklist_Sender) ) {
-						.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
-						Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
-					}
-					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-					$global:enable_SecureX = $false
-				}
-			}
+		Write-OutPut "    |" >> $LOGFILE
+		Write-Output "    |--> The Redirected URL is: $($URLAccessible)" >> $LOGFILE
+		if ( (! $([System.Uri]$URL).AbsolutePath.EndsWith('/'))  -and ($EXTENSIONARRAY.contains($(([System.Uri]$URL).Segments)[-1].split(".")[-1])) ) {
+			Write-OutPut "$($(([System.Uri]$URL).Segments)[-1]) no needs to scan" >> $LOGFILE
 		}else{
-			$URL = $OriginalURL
-			if (! $EXTENSIONARRAY.contains($(([System.Uri]$URL).Host))) {
-				Submit-URL-Virustotal
-				Submit-URLSCAN
-				Google-Safe-Browsing
-				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"  >> $LOGFILE
-				if ( $global:enable_SecureX ) {
+			Submit-URL-Virustotal
+			Submit-URLSCAN
+			Google-Safe-Browsing
+			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"  >> $LOGFILE
+			if ( $global:enable_SecureX ) {
+				if ( $global:MODULE_LIST.'MineMeld_Indicator.ps1' -eq "ON" ) {
 					.\MineMeld_Indicator.ps1 $URL URL -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
 					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
 					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+				}
+				if ( $global:MODULE_LIST.'secureX.ps1' -eq "ON" ) {
 					.\secureX.ps1 $URL >> $LOGFILE
 					Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
 					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-					if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
+				}
+				if ( $global:MODULE_LIST.'ESA_Spam_Block.ps1' -eq "ON" ) {
+					if ( ![string]::IsNullOrEmpty($global:CdoMessage) ) {
 						$regex = [regex]"\<(.*)\>"
-						$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
+						$Blocklist_Sender = $($regex.match($($global:CdoMessage.From)).Groups[1].value).ToLower()
 					}else{
 						$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
 						$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
 						if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
-						}
+					}
 					if ( ![string]::IsNullOrEmpty($Blocklist_Sender) ) {
 						.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
 						Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
 					}
 					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-					$global:enable_SecureX = $false
 				}
-			}
-			$URL = $RedirectedURL
-			if (! $EXTENSIONARRAY.contains($(([System.Uri]$URL).Host))) {
-				Submit-URL-Virustotal
-				Submit-URLSCAN
-				Google-Safe-Browsing
-				Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"  >> $LOGFILE
-				if ( $global:enable_SecureX ) {
-					.\MineMeld_Indicator.ps1 $URL URL -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
-					Write-OutPut "$($URL) has been added into MineMeld." >> $LOGFILE
-					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-					.\secureX.ps1 $URL >> $LOGFILE
-					Write-OutPut "secureX and MDATP investigation is done." >> $LOGFILE
-					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-					if ( ![string]::IsNullOrEmpty($CdoMessage) ) {
-						$regex = [regex]"\<(.*)\>"
-						$Blocklist_Sender = $($regex.match($($CdoMessage.From)).Groups[1].value).ToLower()
-					}else{
-						$regex = "From:.*?(?<=[\[\<]).+?(?=[\]\>])"
-						$regex_eml = '([\w-\.]+)@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.)|(([\w-]+\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\]?)'
-						if ( @([regex]::Matches($EMAIL.Body.Text, $regex).value).length -gt 1 ) { $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value[-1]), $regex_eml).value[-1] }else{  $Blocklist_Sender = [regex]::Matches($([regex]::Matches($EMAIL.Body.Text, $regex).Value), $regex_eml).value }
-						}
-					if ( ![string]::IsNullOrEmpty($Blocklist_Sender) ) {
-						.\ESA_Spam_Block.ps1 $Blocklist_Sender ALL >> $LOGFILE
-						Write-OutPut "SPAM Sender $($Blocklist_Sender) has been blacklisted." >> $LOGFILE
-					}
-					Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-					$global:enable_SecureX = $false
-				}
+				$global:enable_SecureX = $false
 			}
 		}
 	}
@@ -579,35 +614,8 @@ function extract_hyperlink_from_Excel {
 	if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
 		foreach($URL in $URLARRAY){
 			Write-OutPut "URL:     ",$URL >> $LOGFILE
-			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 			CheckRedirectedURL
 		}
-	}
-}
-
-function Base64Decode {
-	$HTMLCONTENT = Get-Content($FILEPATH)
-	$FILENAME = Split-Path $FILEPATH -leaf
-	if ( $HTMLCONTENT -like "*atob('*')*" ){
-		Write-OutPut "=====================HTML FILE IS BASE64 ENCODED=====================" >> $LOGFILE
-		$PATTERN = "'.*'"
-		$ENCODEHTML = $($([regex]::Matches($HTMLCONTENT, $PATTERN).value) -replace "'","")
-		$DECODEHTML = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($ENCODEHTML))
-		$ATTFILENAME = $DOWNLOADDIRECTORY + "DECODE_" + $FILENAME
-		$DECODEHTML | Out-File -FilePath $ATTFILENAME
-		Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
-		python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
-		$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
-		if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
-			.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE 
-			Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
-			Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
-		}
-		Submit-FILE-OPSWAT
-		Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
-		ExtractURLFromPDFHTML
-		Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
-		python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
 	}
 }
 
@@ -670,7 +678,6 @@ function MAIN {
 					if ( -not ([string]::IsNullOrEmpty($URLARRAY)) ){
 						foreach($URL in $URLARRAY){
 							Write-OutPut "URL:     ",$URL >> $LOGFILE
-							Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
 							CheckRedirectedURL
 						}
 					}
@@ -681,7 +688,7 @@ function MAIN {
 						# only save the file that extension is not in the extension list
 						if ( !$EXTENSIONARRAY.contains($EXTENSION) -or [string]::IsNullOrEmpty($EXTENSION) ){
 							if ( ($ATTACH.ContentType -eq "message/rfc822") -or ([string]::IsNullOrEmpty($ATTACH.ContentType)) -and ($ATTACH.PSobject.Properties.name -match "Item") ){
-								Write-OutPut "=====================The attachment is an email=====================" >> $LOGFILE
+								Write-OutPut "========================The attachment is an email=========================" >> $LOGFILE
 								$MIMEPROPERTYSET = new-object Microsoft.Exchange.WebServices.Data.PropertySet([Microsoft.Exchange.WebServices.Data.ItemSchema]::MimeContent)
 								$ATTACH.Load($MIMEPROPERTYSET)
 								$AttachmentData = $ATTACH.Item.MimeContent.Content
@@ -697,13 +704,13 @@ function MAIN {
 							if ( [string]::IsNullOrEmpty($ExceptionError) ) {
 								$ATTFILE.Write($AttachmentData, 0, $AttachmentData.Length)
 								$ATTFILE.Close()
-								Write-OutPut "Downloaded Attachment : "  ($ATTFILENAME) >> $LOGFILE
+								Write-OutPut "Downloaded Attachment : $($ATTFILENAME)" >> $LOGFILE
 								Try { $ALGORITHM = (Get-FileHash ($ATTFILENAME)).Algorithm }
 								Catch [System.SystemException] { $ExceptionError = $_.Exception.Message }
 								if ( [string]::IsNullOrEmpty($ExceptionError) ) {
 									$HASH = (Get-FileHash ($ATTFILENAME)).Hash.ToLower()
 									$FILEPATH = (Get-FileHash ($ATTFILENAME)).Path
-									Write-OutPut "Attachment $ALGORITHM Hash : "  $HASH >> $LOGFILE
+									Write-OutPut "Attachment $ALGORITHM Hash : $($HASH)" >> $LOGFILE
 									if ( ($EXTENSION -eq ".eml") -or ($EXTENSION -eq ".raw") ){
 										FromEmailAttachment $ATTFILENAME
 									} else{
@@ -711,30 +718,48 @@ function MAIN {
 												extract_hyperlink_from_Excel
 											}	
 											if ( ($EXTENSION -eq ".pdf") -or ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
-												Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
-												python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
-												$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
-												if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
-													.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE 
-													Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
-													Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE												
+												if ( $global:MODULE_LIST.'Submit_FILE_Virustotal.py' -eq "ON" ) {
+													Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
+													python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+													$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
+													if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
+														if ( $global:MODULE_LIST.'MineMeld_Indicator.ps1' -eq "ON" ) {
+															.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE 
+															Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
+															Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+														}
+													}
 												}
 												Submit-FILE-OPSWAT
 												Write-OutPut "=====================Extract URLs from the PDF/HTML file=====================" >> $LOGFILE
 												ExtractURLFromPDFHTML
-												Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
-												python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
+												if ( $global:MODULE_LIST.'selenium_simulator.py' -eq "ON" ) {
+													Write-OutPut "=====================Selenimu Simulator=====================" >> $LOGFILE
+													python selenium_simulator.py $ATTFILENAME $LOGFILE >> $LOGFILE
+												}
 												if ( ($EXTENSION -eq ".htm") -or ($EXTENSION -eq ".html") -or ($EXTENSION -eq ".shtml") ){
-													Base64Decode
+													$HTMLCONTENT = Get-Content($FILEPATH)
+														if ( ($HTMLCONTENT -like "*atob('*')*")  -or ($HTMLCONTENT -like "*document.write(unescape('*')*") -or ($HTMLCONTENT -like "*base64*") -or ($HTMLCONTENT -like "*\u00*") ){
+															Write-OutPut "********************************************************************" >> $LOGFILE
+															Write-OutPut "*                                                                  *" >> $LOGFILE
+															Write-OutPut "*         HTML FILE IS ENCODED AND IT IS HIGHLY SUSPICIOUS         *" >> $LOGFILE
+															Write-OutPut "*                                                                  *" >> $LOGFILE
+															Write-OutPut "********************************************************************" >> $LOGFILE
+														}
 												}
 											}else {
 												if ( -not ([string]::IsNullOrEmpty($FILEPATH)) ){
-													python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
-													$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
-													if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
-														.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
-														Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
-														Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+													if ( $global:MODULE_LIST.'Submit_FILE_Virustotal.py' -eq "ON" ) {
+														Write-OutPut "=====================Submit File to VirusTotal and OPSWAT=====================" >> $LOGFILE
+														python Submit_FILE_Virustotal.py $FILEPATH >> $LOGFILE
+														$scan_result = Get-Content $LOGFILE -Tail 1 | ConvertFrom-Json
+														if ( ($scan_result.'malicious' -ne 0) -or ($scan_result.'suspicious' -ne 0) ) {
+															if ( $global:MODULE_LIST.'MineMeld_Indicator.ps1' -eq "ON" ) {
+																.\MineMeld_Indicator.ps1 $HASH $ALGORITHM.ToLower() -comment "AutoSpamEmailScan Script Detected and Blocked" >> $LOGFILE
+																Write-OutPut "$($HASH) has been added into MineMeld." >> $LOGFILE
+																Write-OutPut "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~" >> $LOGFILE
+															}
+														}
 													}
 													Submit-FILE-OPSWAT
 												}
