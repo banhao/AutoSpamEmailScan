@@ -161,7 +161,7 @@ eHealth Saskatechewan
 "@
 						if ( $enable_alert -eq $true) { 
 							if ( ![string]::IsNullOrEmpty($ADUser_Properties.EmailAddress) ) {
-								Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "emailsecurity@ehealthsask.ca" -Cc "ehssecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
+								Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "EMAILADDRESS" -Cc "EMAILADDRESS" -Subject "Security Alert" -Body $EmailBody
 								Write-OutPut "Alert Message has been sent to $($Recipient)"
 							}else{ Write-OutPut "$($Recipient) Email Address is not exist." }	
 						}
@@ -216,7 +216,7 @@ eHealth Saskatechewan
 "@
 						if ( $enable_alert -eq $true) { 
 							if ( ![string]::IsNullOrEmpty($ADUser_Properties.EmailAddress) ) {
-								Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "emailsecurity@ehealthsask.ca" -Cc "ehssecurity@ehealthsask.ca" -Subject "Security Alert" -Body $EmailBody
+								Send-MailMessage -SmtpServer relay-partner.ehealthsask.ca -To $ADUser_Properties.EmailAddress -From "EMAILADDRESS" -Cc "EMAILADDRESS" -Subject "Security Alert" -Body $EmailBody
 								Write-OutPut "Alert Message has been sent to $($HOSTNAME)"
 							}else{ Write-OutPut "$($Recipient) Email Address is not exist." }
 						}
