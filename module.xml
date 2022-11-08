@@ -1,0 +1,38 @@
+<SETTINGS>
+	<MODULE>RedirectURL.py
+		<ENABLE>ON</ENABLE>
+		<COMMENT>without this feature the script cannot check the redirection URL.</COMMENT>
+	</MODULE>
+	
+	<MODULE>pdf2url.py
+		<ENABLE>ON</ENABLE>
+		<COMMENT>without this feature the script cannot conver a pdf to HTML and cannot extract the URL from a PDF file.</COMMENT>
+	</MODULE>
+	
+	<MODULE>selenium_simulator.py
+		<ENABLE>ON</ENABLE>
+		<COMMENT>without this feature the script cannot simulate as a browser to open an URL or a HTML file.</COMMENT>
+	</MODULE>
+	
+	<MODULE>Submit_FILE_Virustotal.py
+		<ENABLE>ON</ENABLE>
+		<COMMENT>without this feature the script cannot submit the files to Virustotal.</COMMENT>
+	</MODULE>
+	
+	<MODULE>MineMeld_Indicator.ps1
+		<ENABLE>ON</ENABLE>
+		<COMMENT>without this feature the script cannot call the MineMeld API to add the IOCs into the Indicator List.</COMMENT>
+	</MODULE>
+	
+	<MODULE>ESA_Spam_Block.ps1
+		<ENABLE>ON</ENABLE>
+		<COMMENT>without this feature the script cannot call the Cisco ESA's API to add the spam email address into the spam quarantine blocklist.</COMMENT>
+	</MODULE>
+	
+	<MODULE>secureX.ps1
+		<ENABLE>ON</ENABLE>
+		<COMMENT>without this feature the script cannot call the Cisco SecureX API and Microsoft 365 Defender API to get the related email information and the end user's activities.</COMMENT>
+	</MODULE>
+
+</SETTINGS>
+
