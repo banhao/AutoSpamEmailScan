@@ -22,7 +22,7 @@ driver = webdriver.Edge(options = edge_options)
 time.sleep(1)
 try:
     driver.get(url)
-    time.sleep(3)
+    time.sleep(10)
     print(driver.current_url)
 except Exception:
     MSG = sys.exc_info()[1]
